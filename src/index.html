@@ -1,0 +1,44 @@
+<!doctype html>
+<html class="no-js" lang="">
+  <head>
+    <meta charset="utf-8" />
+    <title>realtime ECG from polar H10</title>
+    <meta name="description" content="Visualize polar h-10 data" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <meta property="og:title" content="" />
+    <meta property="og:type" content="" />
+    <meta property="og:url" content="" />
+    <meta property="og:image" content="" />
+
+    <link rel="icon" href="favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="spectre.min.css" />
+    <link rel="stylesheet" href="spectre-icons.min.css" />
+    <link rel="stylesheet" href="style.css" />
+
+    <meta name="theme-color" content="#fafafa" />
+    <script src="coi-serviceworker.min.js"></script>
+  </head>
+
+  <body>
+    <!-- Add your site or application content here -->
+    <!-- <p>Hello world! This is HTML5 Boilerplate.</p> -->
+    <!-- <div style="width: 100vw; height: 10vh">
+      <canvas id="chart" style="width: 50; height: 100"></canvas>
+    </div> -->
+
+    <script type="module" src="index.js"></script>
+    <script>
+      /******************************************************************************
+       * esbuild live-reload                                                        *
+       ******************************************************************************/
+      function location_reload() {
+        location.reload();
+        console.log("Page reloaded");
+      }
+      if (!window.IS_PRODUCTION) {
+        new EventSource("/esbuild").addEventListener("change", location_reload);
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "name": "polar-h10-visualizer",
+  "version": "1.0.0",
+  "description": "Visualization for polar h10 ecg sensor",
+  "homepage": "https://github.com/yhzhao343/polar-h10-visualizer#readme",
+  "bugs": {
+    "url": "https://github.com/yhzhao343/polar-h10-visualizer/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yhzhao343/polar-h10-visualizer.git"
+  },
+  "license": "ISC",
+  "author": "Yuhui Zhao",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "add-coi": "esbuild node_modules/coi-serviceworker/coi-serviceworker.js --minify --outfile=./src/coi-serviceworker.min.js && cp ./src/coi-serviceworker.min.js ./build/coi-serviceworker.min.js",
+    "cp-file": "mkdir -p build && cp src/index.html build/ && cp src/style.css build/ && cp src/favicon.ico build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre.min.css build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre-icons.min.css build/",
+    "dev": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:IS_PRODUCTION=false --watch --servedir=build --allow-overwrite --format=esm"
+  },
+  "dependencies": {
+    "@spectre-org/spectre-css": "^1.2.0",
+    "coi-serviceworker": "^0.1.7",
+    "esbuild": "^0.25.5",
+    "smoothie": "^1.36.1"
+  },
+  "devDependencies": {
+    "@types/web-bluetooth": "^0.0.21"
+  }
+}
