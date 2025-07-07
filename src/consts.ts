@@ -20,6 +20,7 @@ export interface PolarH10Data {
   type: (typeof PolarSensorNames)[number];
   samples: Acceleration[] | number[];
   sample_timestamp_ms: number;
+  prev_sample_timestamp_ms: number;
   recv_epoch_time_ms: number;
 }
 
@@ -160,7 +161,7 @@ export const DEFAULT_EEG_LINE_CHART_OPTION: IChartOptions = {
     fillStyle: "#000000",
     lineWidth: 1,
     millisPerLine: 1000,
-    borderVisible: true,
+    borderVisible: false,
   },
   responsive: true,
   nonRealtimeData: true,
@@ -170,9 +171,9 @@ export const DEFAULT_EEG_LINE_CHART_OPTION: IChartOptions = {
 };
 
 export const DEFAULT_TIME_SERIES_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 1,
-    interpolation: "linear",
-    // strokeStyle: "rgba(0, 255, 0, 1)",
-    // fillStyle: "rgba(0, 255, 0, 0.2)",
-  };
+{
+  lineWidth: 1,
+  interpolation: "linear",
+  // strokeStyle: "rgba(0, 255, 0, 1)",
+  // fillStyle: "rgba(0, 255, 0, 0.2)",
+};

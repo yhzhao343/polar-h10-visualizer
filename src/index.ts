@@ -118,7 +118,7 @@ async function polarConnect() {
   //   "width:50px; display: flex; justify-content: center; align-items: center;",
   // );
 
-  console.log(device);
+  // console.log(device);
   if (device.name) {
     nameDiv.textContent = `Conneting ${device.name.substring(10)}`;
   }
@@ -138,7 +138,7 @@ async function polarConnect() {
     return;
   }
 
-  console.log(polarH10.device);
+  // console.log(polarH10.device);
   const battLvl = await polarH10.getBatteryLevel();
   optionDiv.removeChild(loadingDiv);
 
@@ -190,21 +190,18 @@ async function polarConnect() {
 
   const newDataCallback = (data: PolarH10Data) => {
     // console.log(data);
-    const estimated_sample_interval = 1000 / 130;
-    if (data.type === "ECG" && ecg_ts !== undefined) {
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        // const timestamp =
-        // data.sample_timestamp_ms -
-        // ((data.samples.length - s_i - 1) * 1000) / 130;
 
+    if (data.type === "ECG" && ecg_ts !== undefined && data.prev_sample_timestamp_ms > 0) {
+      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / data.samples.length;
+      console.log(`estimated sample rate: ${1000 / estimated_sample_interval}`);
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const timestamp = data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
         // ecg_ts.append(timestamp, (data.samples as number[])[s_i]);
         setTimeout(() => {
-          if (ecg_ts !== undefined) {
-            ecg_ts.append(
-              new Date().valueOf(),
-              (data.samples as number[])[s_i],
-            );
-          }
+          ecg_ts?.append(
+            timestamp,
+            (data.samples as number[])[s_i],
+          );
         }, s_i * estimated_sample_interval);
       }
     } else if (data.type === "ACC") {
@@ -213,7 +210,6 @@ async function polarConnect() {
   polarH10.setDataHandle(newDataCallback);
 
   const onToggleECG = async (ev: any) => {
-    console.log(ev.target?.checked);
     if (ev.target?.checked) {
       ECGDiv = document.createElement("div");
       ECGDiv.setAttribute("style", "flex:3;");
@@ -231,8 +227,6 @@ async function polarConnect() {
       if (startECGReply) {
         console.log(startECGReply);
       }
-      // const acc_canvas = document.createElement("canvas");
-      // acc_col.appendChild(acc_canvas);
     } else {
       if (ECGDiv !== undefined) {
         if (visContainerDiv.contains(ECGDiv)) {

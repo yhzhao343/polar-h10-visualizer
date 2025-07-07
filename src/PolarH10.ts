@@ -12,7 +12,6 @@ import {
   ERROR_MSGS,
   PMDCtrlReply,
   Acceleration,
-  EXTRA_OFFSET_NS,
   PolarH10Data,
 } from "./consts";
 
@@ -28,6 +27,8 @@ export class PolarH10 {
   verbose: boolean = true;
   dataHandle: ((data: PolarH10Data) => void) | undefined;
   timeOffset: bigint = BigInt(0);
+  lastECGTimestamp: number;
+  lastACCTimestamp: number;
 
   constructor(
     device: BluetoothDevice,
@@ -37,6 +38,8 @@ export class PolarH10 {
     this.device = device;
     this.dataHandle = dataHandle;
     this.verbose = verbose;
+    this.lastECGTimestamp = 0;
+    this.lastACCTimestamp = 0;
   }
 
   setDataHandle(dataHandle: (data: PolarH10Data) => void) {
@@ -175,6 +178,7 @@ export class PolarH10 {
   };
 
   PMDACCDataHandle = (event: any) => {
+    // console.log(event);
     const val: DataView = event?.target?.value;
     if (val?.getUint8(0) == PolarSensorType.ACC) {
       const dataTimeStamp = val.getBigUint64(1, true);
@@ -209,8 +213,10 @@ export class PolarH10 {
         type: "ACC",
         samples: samples,
         sample_timestamp_ms: offset_timestamp,
+        prev_sample_timestamp_ms: this.lastACCTimestamp,
         recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
       };
+      this.lastACCTimestamp = offset_timestamp;
       if (this.dataHandle !== undefined) {
         this.dataHandle(dataFrame);
       }
@@ -218,7 +224,9 @@ export class PolarH10 {
   };
 
   PMDECGDataHandle = (event: any) => {
+    // console.log(event);
     const val: DataView = event?.target?.value;
+
     if (val?.getUint8(0) == PolarSensorType.ECG) {
       const dataTimeStamp = val.getBigUint64(1, true);
       if (this.timeOffset === BigInt(0)) {
@@ -230,13 +238,11 @@ export class PolarH10 {
       if (frame_type === 0) {
         for (let i = 10; i < val.byteLength; i += 3) {
           let d =
-            (val.getInt8(i + 2) << 16) |
-            (val.getInt8(i + 1) << 8) |
-            val.getInt8(i);
-          if ((d & 0x00800000) > 0) {
-            d |= 0xff000000;
-          } else {
-            d &= 0x00ffffff;
+            (val.getUint8(i + 2) << 16) |
+            (val.getUint8(i + 1) << 8) |
+            val.getUint8(i);
+          if (d & 0x800000) {
+            d |= 0xFF000000;
           }
           samples.push(d);
         }
@@ -245,8 +251,11 @@ export class PolarH10 {
         type: "ECG",
         samples: samples,
         sample_timestamp_ms: offset_timestamp,
+        prev_sample_timestamp_ms: this.lastECGTimestamp,
         recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
       };
+      // console.log(dataFrame);
+      this.lastECGTimestamp = offset_timestamp;
       if (this.dataHandle !== undefined) {
         this.dataHandle(dataFrame);
       }
