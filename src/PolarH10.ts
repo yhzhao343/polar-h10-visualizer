@@ -11,8 +11,8 @@ import {
   PolarSettingType,
   ERROR_MSGS,
   PMDCtrlReply,
-  Acceleration,
   PolarH10Data,
+  DataHandlerDict,
 } from "./consts";
 
 export class PolarH10 {
@@ -25,26 +25,53 @@ export class PolarH10 {
   BattLvlChar: BluetoothRemoteGATTCharacteristic | undefined = undefined;
   streaming: boolean = false;
   verbose: boolean = true;
-  dataHandle: ((data: PolarH10Data) => void) | undefined;
+  dataHandle: DataHandlerDict = {};
+  // dataHandle: ((data: PolarH10Data) => void)[];
   timeOffset: bigint = BigInt(0);
+  eventTimeOffset: number;
   lastECGTimestamp: number;
   lastACCTimestamp: number;
 
-  constructor(
-    device: BluetoothDevice,
-    dataHandle: ((data: PolarH10Data) => void) | undefined = undefined,
-    verbose: boolean = true,
-  ) {
+  constructor(device: BluetoothDevice, verbose: boolean = true) {
     this.device = device;
-    this.dataHandle = dataHandle;
     this.verbose = verbose;
     this.lastECGTimestamp = 0;
     this.lastACCTimestamp = 0;
+    for (let i = 0; i < PolarSensorNames.length; i++) {
+      this.dataHandle[PolarSensorNames[i]] = [];
+    }
   }
 
-  setDataHandle(dataHandle: (data: PolarH10Data) => void) {
-    this.dataHandle = dataHandle;
-  }
+  addEventListener = (
+    type: (typeof PolarSensorNames)[number],
+    handler: (data: PolarH10Data) => void,
+  ) => {
+    if (!this.dataHandle[type].includes(handler)) {
+      this.dataHandle[type].push(handler);
+    }
+    // console.log(this.dataHandle[type]);
+    // console.log(this.dataHandle[type].push(handler));
+    // }
+    // console.log(this.dataHandle[type]);
+  };
+
+  removeEventListener = (
+    type: (typeof PolarSensorNames)[number],
+    handler: (data: PolarH10Data) => void,
+  ) => {
+    if (this.dataHandle[type].includes(handler)) {
+      this.dataHandle[type].splice(this.dataHandle[type].indexOf(handler), 1);
+    }
+  };
+
+  clearEventListner = (type: (typeof PolarSensorNames)[number]) => {
+    delete this.dataHandle[type];
+    this.dataHandle[type] = [];
+  };
+
+  // setDataHandle(dataHandle: (data: PolarH10Data) => void) {
+  //   this.dataHandle = dataHandle;
+  // }
 
   log = (...o: any[]) => {
     if (this.verbose) {
@@ -71,6 +98,11 @@ export class PolarH10 {
     this.BattLvlChar =
       await this.BattService?.getCharacteristic("battery_level");
     this.log(`    Got battery level characteristic`);
+
+    this.PMDDataChar?.addEventListener(
+      "characteristicvaluechanged",
+      this.PMDDataHandle,
+    );
   };
 
   PMDCtrlCharHandle = (event: any) => {
@@ -177,90 +209,145 @@ export class PolarH10 {
     }
   };
 
-  PMDACCDataHandle = (event: any) => {
+  PMDDataHandle = (event: any) => {
     // console.log(event);
-    const val: DataView = event?.target?.value;
-    if (val?.getUint8(0) == PolarSensorType.ACC) {
-      const dataTimeStamp = val.getBigUint64(1, true);
-      if (this.timeOffset === BigInt(0)) {
-        this.timeOffset = dataTimeStamp;
-      }
-      const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
-      // Number(val.getBigUint64(1, true) - EXTRA_OFFSET_NS) / 1e6;
-      // console.log(timestamp_ms, new Date(timestamp_ms), new Date());
-      const frame_type = val.getUint8(9);
-      const samples: Acceleration[] = [];
-      if (frame_type == 0) {
-        for (let i = 10; i < val.byteLength; i += 3) {
-          const d = {
-            x: val.getInt8(i),
-            y: val.getInt8(i + 1),
-            z: val.getInt8(i + 2),
-          };
-          samples.push(d);
-        }
-      } else if (frame_type == 1) {
-        for (let i = 10; i < val.byteLength; i += 6) {
-          const d = {
-            x: val.getInt16(i, true) / 1e3,
-            y: val.getInt16(i + 2, true) / 1e3,
-            z: val.getInt16(i + 4, true) / 1e3,
-          };
-          samples.push(d);
-        }
-      }
-      const dataFrame: PolarH10Data = {
-        type: "ACC",
-        samples: samples,
-        sample_timestamp_ms: offset_timestamp,
-        prev_sample_timestamp_ms: this.lastACCTimestamp,
-        recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
-      };
-      this.lastACCTimestamp = offset_timestamp;
-      if (this.dataHandle !== undefined) {
-        this.dataHandle(dataFrame);
-      }
+    const val: DataView = event.target.value;
+    const dataTimeStamp = val.getBigUint64(1, true);
+    if (this.timeOffset === BigInt(0)) {
+      this.timeOffset = dataTimeStamp;
+      this.eventTimeOffset = event.timeStamp + performance.timeOrigin;
     }
-  };
+    const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
+    const type = val.getUint8(0);
+    const frame_type = val.getUint8(9);
 
-  PMDECGDataHandle = (event: any) => {
-    // console.log(event);
-    const val: DataView = event?.target?.value;
+    const dataFrame: PolarH10Data = {
+      type: PolarSensorType[type],
+      sample_timestamp_ms: offset_timestamp,
+      prev_sample_timestamp_ms: 0,
+      recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
+      event_time_offset_ms: this.eventTimeOffset,
+    };
+    switch (type) {
+      case PolarSensorType.ACC:
+        if (frame_type == 1) {
+          const numFrames = Math.floor((val.byteLength - 10) / 2);
+          dataFrame.samples = new Int16Array(
+            val.buffer.slice(10, val.byteLength),
+          );
+          dataFrame.prev_sample_timestamp_ms = this.lastACCTimestamp;
+          this.lastACCTimestamp = offset_timestamp;
+        }
 
-    if (val?.getUint8(0) == PolarSensorType.ECG) {
-      const dataTimeStamp = val.getBigUint64(1, true);
-      if (this.timeOffset === BigInt(0)) {
-        this.timeOffset = dataTimeStamp;
-      }
-      const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
-      const frame_type = val.getUint8(9);
-      const samples: number[] = [];
-      if (frame_type === 0) {
-        for (let i = 10; i < val.byteLength; i += 3) {
-          let d =
-            (val.getUint8(i + 2) << 16) |
-            (val.getUint8(i + 1) << 8) |
-            val.getUint8(i);
-          if (d & 0x800000) {
-            d |= 0xFF000000;
+        break;
+      case PolarSensorType.ECG:
+        if (frame_type === 0) {
+          const numFrames = Math.floor((val.byteLength - 10) / 3);
+          dataFrame.samples = new Int32Array(numFrames);
+          for (let i = 10; i < val.byteLength; i += 3) {
+            let d =
+              (val.getUint8(i + 2) << 16) |
+              (val.getUint8(i + 1) << 8) |
+              val.getUint8(i);
+            if (d & 0x800000) {
+              d |= 0xff000000;
+            }
+            dataFrame.samples[Math.floor((i - 10) / 3)] = d;
           }
-          samples.push(d);
+          dataFrame.prev_sample_timestamp_ms = this.lastECGTimestamp;
+          this.lastECGTimestamp = offset_timestamp;
         }
-      }
-      const dataFrame: PolarH10Data = {
-        type: "ECG",
-        samples: samples,
-        sample_timestamp_ms: offset_timestamp,
-        prev_sample_timestamp_ms: this.lastECGTimestamp,
-        recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
-      };
-      // console.log(dataFrame);
-      this.lastECGTimestamp = offset_timestamp;
-      if (this.dataHandle !== undefined) {
-        this.dataHandle(dataFrame);
-      }
+        break;
+    }
+    for (const handler of this.dataHandle[PolarSensorType[type]]) {
+      handler(dataFrame);
     }
   };
+
+  // PMDACCDataHandle = (event: any) => {
+  //   // console.log(event);
+  //   const val: DataView = event?.target?.value;
+  //   if (val?.getUint8(0) == PolarSensorType.ACC) {
+  //     const dataTimeStamp = val.getBigUint64(1, true);
+  //     if (this.timeOffset === BigInt(0)) {
+  //       this.timeOffset = dataTimeStamp;
+  //     }
+  //     const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
+  //     // Number(val.getBigUint64(1, true) - EXTRA_OFFSET_NS) / 1e6;
+  //     // console.log(timestamp_ms, new Date(timestamp_ms), new Date());
+  //     const frame_type = val.getUint8(9);
+  //     const samples: Acceleration[] = [];
+  //     if (frame_type == 0) {
+  //       for (let i = 10; i < val.byteLength; i += 3) {
+  //         const d = {
+  //           x: val.getInt8(i),
+  //           y: val.getInt8(i + 1),
+  //           z: val.getInt8(i + 2),
+  //         };
+  //         samples.push(d);
+  //       }
+  //     } else if (frame_type == 1) {
+  //       for (let i = 10; i < val.byteLength; i += 6) {
+  //         const d = {
+  //           x: val.getInt16(i, true) / 1e3,
+  //           y: val.getInt16(i + 2, true) / 1e3,
+  //           z: val.getInt16(i + 4, true) / 1e3,
+  //         };
+  //         samples.push(d);
+  //       }
+  //     }
+  //     const dataFrame: PolarH10Data = {
+  //       type: "ACC",
+  //       samples: samples,
+  //       sample_timestamp_ms: offset_timestamp,
+  //       prev_sample_timestamp_ms: this.lastACCTimestamp,
+  //       recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
+  //     };
+  //     this.lastACCTimestamp = offset_timestamp;
+  //     if (this.dataHandle !== undefined) {
+  //       this.dataHandle(dataFrame);
+  //     }
+  //   }
+  // };
+
+  // PMDECGDataHandle = (event: any) => {
+  //   // console.log(event);
+  //   const val: DataView = event?.target?.value;
+
+  //   if (val?.getUint8(0) == PolarSensorType.ECG) {
+  //     const dataTimeStamp = val.getBigUint64(1, true);
+  //     if (this.timeOffset === BigInt(0)) {
+  //       this.timeOffset = dataTimeStamp;
+  //     }
+  //     const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
+  //     const frame_type = val.getUint8(9);
+  //     const samples: number[] = [];
+  //     if (frame_type === 0) {
+  //       for (let i = 10; i < val.byteLength; i += 3) {
+  //         let d =
+  //           (val.getUint8(i + 2) << 16) |
+  //           (val.getUint8(i + 1) << 8) |
+  //           val.getUint8(i);
+  //         if (d & 0x800000) {
+  //           d |= 0xff000000;
+  //         }
+  //         samples.push(d);
+  //       }
+  //     }
+  //     const dataFrame: PolarH10Data = {
+  //       type: "ECG",
+  //       samples: samples,
+  //       sample_timestamp_ms: offset_timestamp,
+  //       prev_sample_timestamp_ms: this.lastECGTimestamp,
+  //       recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
+  //     };
+  //     // console.log(dataFrame);
+  //     this.lastECGTimestamp = offset_timestamp;
+  //     if (this.dataHandle !== undefined) {
+  //       this.dataHandle(dataFrame);
+  //     }
+  //   }
+  // };
 
   parseCtrlReply = (val: DataView): PMDCtrlReply | undefined => {
     if (val.getUint8(0) === 0xf0) {
@@ -322,10 +409,10 @@ export class PolarH10 {
     cmd_buf[11] = 1;
     cmd_buf_dataview.setUint16(12, resolution, true);
 
-    this.PMDDataChar?.addEventListener(
-      "characteristicvaluechanged",
-      this.PMDACCDataHandle,
-    );
+    // this.PMDDataChar?.addEventListener(
+    //   "characteristicvaluechanged",
+    //   this.PMDACCDataHandle,
+    // );
     await this.PMDCtrlChar?.writeValue(cmd_buf);
     return await startACCPromise;
   };
@@ -364,10 +451,10 @@ export class PolarH10 {
     cmd_buf[7] = 1;
     cmd_buf_dataview.setUint16(8, sample_rate, true);
 
-    this.PMDDataChar?.addEventListener(
-      "characteristicvaluechanged",
-      this.PMDECGDataHandle,
-    );
+    // this.PMDDataChar?.addEventListener(
+    //   "characteristicvaluechanged",
+    //   this.PMDECGDataHandle,
+    // );
     await this.PMDCtrlChar?.writeValue(cmd_buf);
     return await startECGPromise;
   };
@@ -391,16 +478,17 @@ export class PolarH10 {
       const val: DataView = event?.target?.value;
       endSensorRSLV(this.parseCtrlReply(val));
     };
+
     this.PMDCtrlChar?.addEventListener(
       "characteristicvaluechanged",
       PMDSensorSettingHandle,
       { once: true },
     );
 
-    this.PMDDataChar?.removeEventListener(
-      "characteristicvaluechanged",
-      this.PMDECGDataHandle,
-    );
+    // this.PMDDataChar?.removeEventListener(
+    //   "characteristicvaluechanged",
+    //   this.PMDECGDataHandle,
+    // );
 
     const cmd_buf = new Uint8Array(2);
     cmd_buf[0] = PolarPMDCommand.REQUEST_MEASUREMENT_STOP;

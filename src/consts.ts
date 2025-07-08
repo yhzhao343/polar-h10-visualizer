@@ -16,12 +16,17 @@ export enum PolarSensorType {
   TEMPERATURE = 12,
 }
 
+export interface DataHandlerDict {
+  [key: (typeof PolarSensorNames)[number]]: ((data: PolarH10Data) => void)[];
+}
+
 export interface PolarH10Data {
   type: (typeof PolarSensorNames)[number];
-  samples: Acceleration[] | number[];
+  samples?: Int16Array | Int32Array;
   sample_timestamp_ms: number;
   prev_sample_timestamp_ms: number;
   recv_epoch_time_ms: number;
+  event_time_offset_ms: number;
 }
 
 export enum PolarSettingType {
@@ -79,6 +84,8 @@ export interface Acceleration {
   y: number;
   z: number;
 }
+
+// export interface Triplet
 
 export const setting_parser_offsets: SettingOffset = {
   SAMPLE_RATE: 2,
@@ -171,9 +178,9 @@ export const DEFAULT_EEG_LINE_CHART_OPTION: IChartOptions = {
 };
 
 export const DEFAULT_TIME_SERIES_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 1,
-  interpolation: "linear",
-  // strokeStyle: "rgba(0, 255, 0, 1)",
-  // fillStyle: "rgba(0, 255, 0, 0.2)",
-};
+  {
+    lineWidth: 1,
+    interpolation: "linear",
+    // strokeStyle: "rgba(0, 255, 0, 1)",
+    // fillStyle: "rgba(0, 255, 0, 0.2)",
+  };
