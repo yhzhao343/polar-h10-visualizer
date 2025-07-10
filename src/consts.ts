@@ -118,7 +118,7 @@ type PolarSettingNameKeys = (typeof PolarSettingNames)[number];
 
 export interface PolarSensorInfo {
   type: (typeof PolarPMDCommandNames)[number];
-  error: (typeof PolarSensorNames)[number];
+  error: (typeof ERROR_MSGS)[number];
   more_frames: number;
   settings: Record<PolarSettingNameKeys, number[] | number[][]>;
 }
@@ -161,8 +161,8 @@ export const ERROR_MSGS = [
   "DEVICE IN CHARGER",
 ];
 
-export const DEFAULT_EEG_LINE_CHART_OPTION: IChartOptions = {
-  limitFPS: 60,
+export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
+  limitFPS: 50,
   grid: {
     strokeStyle: "#484f58",
     fillStyle: "#000000",
@@ -170,17 +170,51 @@ export const DEFAULT_EEG_LINE_CHART_OPTION: IChartOptions = {
     millisPerLine: 1000,
     borderVisible: false,
   },
-  responsive: true,
+  responsive: false,
   nonRealtimeData: true,
   millisPerPixel: 8,
-
   scaleSmoothing: 0.1,
 };
 
-export const DEFAULT_TIME_SERIES_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
+export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
+  limitFPS: 50,
+  minValue: -2000,
+  maxValue: 2000,
+  grid: {
+    strokeStyle: "#484f58",
+    fillStyle: "#000000",
     lineWidth: 1,
-    interpolation: "linear",
-    // strokeStyle: "rgba(0, 255, 0, 1)",
-    // fillStyle: "rgba(0, 255, 0, 0.2)",
-  };
+    millisPerLine: 1000,
+    borderVisible: false,
+  },
+  responsive: false,
+  nonRealtimeData: true,
+  millisPerPixel: 8,
+  scaleSmoothing: 0.1,
+};
+
+export const ECG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  // strokeStyle: "rgba(0, 255, 0, 1)",
+  // fillStyle: "rgba(0, 255, 0, 0.2)",
+};
+
+export const X_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "rgba(255, 69, 58, 1)",
+  // fillStyle: "rgba(0, 255, 0, 0.2)",
+};
+
+export const Y_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "rgba(50, 255, 75, 1)",
+};
+
+export const Z_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "rgba(10, 132, 255, 1)",
+};

@@ -11,8 +11,70 @@ body {
   font-family: Verdana, sans-serif;
 }
 
+div.container {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  margin-left: 10px;
+  padding-right: 15px;
+}
+
 .center {
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.title {
+  display: inline-block;
+  justify-content: center;
+  align-items: center;
+  margin-top: 10px;
+}
+
+div.content {
+  height: 100%;
+  flex-grow: 1;
+  flex-direction: column;
+}
+
+.flexbox {
   display: flex;
+}
+
+.full-height {
+  height: 100%;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.half-width {
+  width: 50%;
+}
+
+.one-third-width {
+  width: 33.3%;
+}
+
+.two-third-width {
+  width: 66.6%;
+}
+
+div.polar-sensor-row {
+  height: 12%;
+  /*margin-right: 25px;*/
+  /*flex-grow: 1;*/
+}
+div.float-left {
+  float: left;
+}
+
+div.polar-sensor-left-panel {
+  width: 160px;
+  display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   align-items: center;
 }

@@ -31,12 +31,16 @@ export class PolarH10 {
   eventTimeOffset: number;
   lastECGTimestamp: number;
   lastACCTimestamp: number;
+  ACCStarted: boolean = false;
+  ECGStarted: boolean = false;
 
   constructor(device: BluetoothDevice, verbose: boolean = true) {
     this.device = device;
     this.verbose = verbose;
     this.lastECGTimestamp = 0;
     this.lastACCTimestamp = 0;
+    this.ACCStarted = false;
+    this.ECGStarted = false;
     for (let i = 0; i < PolarSensorNames.length; i++) {
       this.dataHandle[PolarSensorNames[i]] = [];
     }
@@ -49,10 +53,6 @@ export class PolarH10 {
     if (!this.dataHandle[type].includes(handler)) {
       this.dataHandle[type].push(handler);
     }
-    // console.log(this.dataHandle[type]);
-    // console.log(this.dataHandle[type].push(handler));
-    // }
-    // console.log(this.dataHandle[type]);
   };
 
   removeEventListener = (
@@ -68,10 +68,6 @@ export class PolarH10 {
     delete this.dataHandle[type];
     this.dataHandle[type] = [];
   };
-
-  // setDataHandle(dataHandle: (data: PolarH10Data) => void) {
-  //   this.dataHandle = dataHandle;
-  // }
 
   log = (...o: any[]) => {
     if (this.verbose) {
@@ -231,10 +227,8 @@ export class PolarH10 {
     switch (type) {
       case PolarSensorType.ACC:
         if (frame_type == 1) {
-          const numFrames = Math.floor((val.byteLength - 10) / 2);
-          dataFrame.samples = new Int16Array(
-            val.buffer.slice(10, val.byteLength),
-          );
+          // const numFrames = Math.floor((val.byteLength - 10) / 2);
+          dataFrame.samples = new Int16Array(val.buffer.slice(10));
           dataFrame.prev_sample_timestamp_ms = this.lastACCTimestamp;
           this.lastACCTimestamp = offset_timestamp;
         }
@@ -264,91 +258,6 @@ export class PolarH10 {
     }
   };
 
-  // PMDACCDataHandle = (event: any) => {
-  //   // console.log(event);
-  //   const val: DataView = event?.target?.value;
-  //   if (val?.getUint8(0) == PolarSensorType.ACC) {
-  //     const dataTimeStamp = val.getBigUint64(1, true);
-  //     if (this.timeOffset === BigInt(0)) {
-  //       this.timeOffset = dataTimeStamp;
-  //     }
-  //     const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
-  //     // Number(val.getBigUint64(1, true) - EXTRA_OFFSET_NS) / 1e6;
-  //     // console.log(timestamp_ms, new Date(timestamp_ms), new Date());
-  //     const frame_type = val.getUint8(9);
-  //     const samples: Acceleration[] = [];
-  //     if (frame_type == 0) {
-  //       for (let i = 10; i < val.byteLength; i += 3) {
-  //         const d = {
-  //           x: val.getInt8(i),
-  //           y: val.getInt8(i + 1),
-  //           z: val.getInt8(i + 2),
-  //         };
-  //         samples.push(d);
-  //       }
-  //     } else if (frame_type == 1) {
-  //       for (let i = 10; i < val.byteLength; i += 6) {
-  //         const d = {
-  //           x: val.getInt16(i, true) / 1e3,
-  //           y: val.getInt16(i + 2, true) / 1e3,
-  //           z: val.getInt16(i + 4, true) / 1e3,
-  //         };
-  //         samples.push(d);
-  //       }
-  //     }
-  //     const dataFrame: PolarH10Data = {
-  //       type: "ACC",
-  //       samples: samples,
-  //       sample_timestamp_ms: offset_timestamp,
-  //       prev_sample_timestamp_ms: this.lastACCTimestamp,
-  //       recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
-  //     };
-  //     this.lastACCTimestamp = offset_timestamp;
-  //     if (this.dataHandle !== undefined) {
-  //       this.dataHandle(dataFrame);
-  //     }
-  //   }
-  // };
-
-  // PMDECGDataHandle = (event: any) => {
-  //   // console.log(event);
-  //   const val: DataView = event?.target?.value;
-
-  //   if (val?.getUint8(0) == PolarSensorType.ECG) {
-  //     const dataTimeStamp = val.getBigUint64(1, true);
-  //     if (this.timeOffset === BigInt(0)) {
-  //       this.timeOffset = dataTimeStamp;
-  //     }
-  //     const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
-  //     const frame_type = val.getUint8(9);
-  //     const samples: number[] = [];
-  //     if (frame_type === 0) {
-  //       for (let i = 10; i < val.byteLength; i += 3) {
-  //         let d =
-  //           (val.getUint8(i + 2) << 16) |
-  //           (val.getUint8(i + 1) << 8) |
-  //           val.getUint8(i);
-  //         if (d & 0x800000) {
-  //           d |= 0xff000000;
-  //         }
-  //         samples.push(d);
-  //       }
-  //     }
-  //     const dataFrame: PolarH10Data = {
-  //       type: "ECG",
-  //       samples: samples,
-  //       sample_timestamp_ms: offset_timestamp,
-  //       prev_sample_timestamp_ms: this.lastECGTimestamp,
-  //       recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
-  //     };
-  //     // console.log(dataFrame);
-  //     this.lastECGTimestamp = offset_timestamp;
-  //     if (this.dataHandle !== undefined) {
-  //       this.dataHandle(dataFrame);
-  //     }
-  //   }
-  // };
-
   parseCtrlReply = (val: DataView): PMDCtrlReply | undefined => {
     if (val.getUint8(0) === 0xf0) {
       const polar_cmd = val.getUint8(1);
@@ -371,10 +280,14 @@ export class PolarH10 {
   };
 
   startACC = async (
-    rangeG: number = 8,
-    sample_rate: number = 200,
+    rangeG: number = 4,
+    sample_rate: number = 100,
     resolution: number = 16,
   ): Promise<PMDCtrlReply | undefined> => {
+    if (this.ACCStarted) {
+      return;
+    }
+
     let startACCRSLV: (value: any | PromiseLike<any>) => void;
     const startACCPromise: Promise<PMDCtrlReply | undefined> = new Promise(
       (rslv, rjct) => {
@@ -409,18 +322,21 @@ export class PolarH10 {
     cmd_buf[11] = 1;
     cmd_buf_dataview.setUint16(12, resolution, true);
 
-    // this.PMDDataChar?.addEventListener(
-    //   "characteristicvaluechanged",
-    //   this.PMDACCDataHandle,
-    // );
     await this.PMDCtrlChar?.writeValue(cmd_buf);
-    return await startACCPromise;
+    const startReply: PMDCtrlReply | undefined = await startACCPromise;
+    if (startReply?.error === ERROR_MSGS[0]) {
+      this.ACCStarted = true;
+    }
+    return startReply;
   };
 
   startECG = async (
     sample_rate: number = 130,
     resolution: number = 14,
   ): Promise<PMDCtrlReply | undefined> => {
+    if (this.ECGStarted) {
+      return;
+    }
     let startECGRSLV: (value: any | PromiseLike<any>) => void;
     const startECGPromise: Promise<PMDCtrlReply | undefined> = new Promise(
       (rslv, rjct) => {
@@ -451,20 +367,38 @@ export class PolarH10 {
     cmd_buf[7] = 1;
     cmd_buf_dataview.setUint16(8, sample_rate, true);
 
-    // this.PMDDataChar?.addEventListener(
-    //   "characteristicvaluechanged",
-    //   this.PMDECGDataHandle,
-    // );
     await this.PMDCtrlChar?.writeValue(cmd_buf);
-    return await startECGPromise;
+    const startReply: PMDCtrlReply | undefined = await startECGPromise;
+    if (startReply?.error === ERROR_MSGS[0]) {
+      this.ECGStarted = true;
+    }
+    return startReply;
   };
 
   stopECG = async () => {
-    return await this.stopSensor(PolarSensorType.ECG);
+    if (!this.ECGStarted) {
+      return;
+    }
+    const endReply: PMDCtrlReply | undefined = await this.stopSensor(
+      PolarSensorType.ECG,
+    );
+    if (endReply?.error === ERROR_MSGS[0]) {
+      this.ECGStarted = false;
+    }
+    return endReply;
   };
 
   stopACC = async () => {
-    return await this.stopSensor(PolarSensorType.ACC);
+    if (!this.ACCStarted) {
+      return;
+    }
+    const endReply: PMDCtrlReply | undefined = await this.stopSensor(
+      PolarSensorType.ACC,
+    );
+    if (endReply?.error === ERROR_MSGS[0]) {
+      this.ACCStarted = false;
+    }
+    return endReply;
   };
 
   stopSensor = async (sensorType: PolarSensorType) => {
@@ -484,11 +418,6 @@ export class PolarH10 {
       PMDSensorSettingHandle,
       { once: true },
     );
-
-    // this.PMDDataChar?.removeEventListener(
-    //   "characteristicvaluechanged",
-    //   this.PMDECGDataHandle,
-    // );
 
     const cmd_buf = new Uint8Array(2);
     cmd_buf[0] = PolarPMDCommand.REQUEST_MEASUREMENT_STOP;
