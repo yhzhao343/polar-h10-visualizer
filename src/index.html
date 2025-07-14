@@ -36,8 +36,13 @@
         location.reload();
         console.log("Page reloaded");
       }
-      if (!window.IS_PRODUCTION) {
-        new EventSource("/esbuild").addEventListener("change", location_reload);
+      if (window.IS_PRODUCTION) {
+        if (!window.IS_PRODUCTION) {
+          new EventSource("/esbuild").addEventListener(
+            "change",
+            location_reload,
+          );
+        }
       }
     </script>
   </body>
