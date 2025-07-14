@@ -2584,7 +2584,7 @@ async function polarConnect() {
           acc_chart.options.maxValue = LOCAL_ACC_MAX;
           acc_chart.updateValueRange();
           if (acc_chart.options.title) {
-            acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order butterworth) on Accelerometer raw`;
+            acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
           }
           if (acc_chart.options.labels) {
             acc_chart.options.labels.disabled = false;
@@ -2762,7 +2762,7 @@ function tilt_legend(canvas, time) {
     if (Z_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = THETA_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
-    ctx.fillText("\u2015 \u03B8\xB0 \u2220(Z-axis, Gravity)", 330, 5);
+    ctx.fillText("\u2015 \u03B8\xB0 \u2220(Z-axis, -Gravity)", 330, 5);
     ctx.restore();
   }
 }
