@@ -1839,6 +1839,7 @@ var PolarH10 = class {
 var import_smoothie = __toESM(require_smoothie(), 1);
 var import_fili = __toESM(require_fili_min(), 1);
 var IIRCalc = new import_fili.CalcCascades();
+var DPR = window.devicePixelRatio;
 function CustomSmoothie(option) {
   import_smoothie.SmoothieChart.call(this, option);
   this.postRender = [];
@@ -2677,7 +2678,7 @@ function scroll_legend(canvas, time) {
     if (EXG_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = "#fbfbfb";
     }
-    ctx.fillText("Scroll to change y-range", canvas.width / 2, 20);
+    ctx.fillText("Scroll to change y-range", canvas.width * DPR / 2, 20);
     ctx.restore();
   }
 }
