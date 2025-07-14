@@ -995,7 +995,7 @@ async function polarConnect() {
           acc_chart.options.maxValue = LOCAL_ACC_MAX;
           acc_chart.updateValueRange();
           if (acc_chart.options.title) {
-            acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order butterworth) on Accelerometer raw`;
+            acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
           }
           if (acc_chart.options.labels) {
             acc_chart.options.labels.disabled = false;
