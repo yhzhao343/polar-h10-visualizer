@@ -1253,7 +1253,7 @@ function tilt_legend(canvas: HTMLCanvasElement, time: number) {
     if (Z_AXIS_PRESENTATION_OPTIONS.strokeStyle !== undefined) {
       ctx.fillStyle = THETA_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
-    ctx.fillText("― θ° ∠(Z-axis, Gravity)", 330, 5);
+    ctx.fillText("― θ° ∠(Z-axis, -Gravity)", 330, 5);
 
     ctx.restore();
   }
