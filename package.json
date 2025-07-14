@@ -24,6 +24,7 @@
     "@spectre-org/spectre-css": "^1.2.0",
     "coi-serviceworker": "^0.1.7",
     "esbuild": "^0.25.5",
+    "fili": "^2.0.3",
     "smoothie": "^1.36.1"
   },
   "devDependencies": {

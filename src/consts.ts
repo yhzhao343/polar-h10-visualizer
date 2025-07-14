@@ -16,6 +16,18 @@ export enum PolarSensorType {
   TEMPERATURE = 12,
 }
 
+export const BODY_PARTS = [
+  "",
+  "LShoulder",
+  "RShoulder",
+  "Chest",
+  "MiddleSpine",
+  "LowerSpine",
+  "Hip",
+  "LThigh",
+  "RThigh",
+];
+
 export interface DataHandlerDict {
   [key: (typeof PolarSensorNames)[number]]: ((data: PolarH10Data) => void)[];
 }
@@ -161,8 +173,29 @@ export const ERROR_MSGS = [
   "DEVICE IN CHARGER",
 ];
 
-export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
-  limitFPS: 50,
+export const EXG_STREAM_DELAY_MS = 600;
+export const EXG_RMS_WINDOW_MS = 200;
+export const EXG_RMS_WINDOW_SIZE = Math.round(130 / (1000 / EXG_RMS_WINDOW_MS));
+export const EXG_HP_MIN = -120;
+export const EXG_HP_MAX = 120;
+export const EXG_RMS_MIN = 0;
+export const EXG_RMS_MAX = 120;
+export const EXG_RMS_HIGHPASS_CUTOFF_HZ = 25;
+export const EXG_RMS_HIGHPASS_ORDER = 4;
+export const EXG_SAMPLE_RATE_HZ = 130;
+// export const ACC_;
+
+export const ACC_STREAM_DELAY_MS = 600;
+export const ACC_SAMPLE_RATE_HZ = 100;
+export const ACC_RANGE_G = 4;
+export const ACC_MIN = -2000;
+export const ACC_MAX = 2000;
+export const AAC_LOWPASS_CUTOFF_HZ = 10;
+export const AAC_LOWPASS_ORDER = 4;
+export const SCROLL_LEGENT_DISP_TIME_MS = 1500;
+
+export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
+  // limitFPS: 60,
   grid: {
     strokeStyle: "#484f58",
     fillStyle: "#000000",
@@ -170,16 +203,24 @@ export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
     millisPerLine: 1000,
     borderVisible: false,
   },
+  title: {
+    text: "ECG/EMG raw (0.7–40 Hz)",
+    fontFamily: "Arial",
+    verticalAlign: "bottom",
+    fillStyle: "#ffffff80",
+    fontSize: 14,
+  },
   responsive: false,
   nonRealtimeData: true,
   millisPerPixel: 8,
   scaleSmoothing: 0.1,
+  tooltip: true,
 };
 
 export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
-  limitFPS: 50,
-  minValue: -2000,
-  maxValue: 2000,
+  // limitFPS: 60,
+  minValue: ACC_MIN,
+  maxValue: ACC_MAX,
   grid: {
     strokeStyle: "#484f58",
     fillStyle: "#000000",
@@ -187,34 +228,92 @@ export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
     millisPerLine: 1000,
     borderVisible: false,
   },
+  title: {
+    text: "Accelerometer raw",
+    fontFamily: "Arial",
+    verticalAlign: "bottom",
+    fillStyle: "#ffffff80",
+    fontSize: 14,
+  },
+  labels: {
+    disabled: false,
+  },
   responsive: false,
   nonRealtimeData: true,
   millisPerPixel: 8,
   scaleSmoothing: 0.1,
+  tooltip: true,
 };
 
-export const ECG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+export const EXG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  // strokeStyle: "rgba(0, 255, 0, 1)",
-  // fillStyle: "rgba(0, 255, 0, 0.2)",
+  strokeStyle: "#ebebebcc",
+};
+
+export const EXG_HP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ffdcaacc",
+};
+
+export const EXG_RMS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#dcaaffcc",
+  fillStyle: "#f0beff99",
 };
 
 export const X_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "rgba(255, 69, 58, 1)",
-  // fillStyle: "rgba(0, 255, 0, 0.2)",
+  strokeStyle: "#ff453acc",
 };
 
 export const Y_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "rgba(50, 255, 75, 1)",
+  strokeStyle: "#32ff4bcc",
 };
 
 export const Z_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "rgba(10, 132, 255, 1)",
+  strokeStyle: "#0a84ffcc",
+};
+
+export const X_LP_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ff776ccc",
+};
+
+export const Y_LP_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#64ff7dcc",
+};
+
+export const Z_LP_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#3cb6ffcc",
+};
+
+export const RHO_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#6effffcc",
+};
+
+export const PHI_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ff70ffcc",
+};
+
+export const THETA_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ffff78cc",
 };
