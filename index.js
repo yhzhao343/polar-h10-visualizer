@@ -2678,7 +2678,7 @@ function scroll_legend(canvas, time) {
     if (EXG_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = "#fbfbfb";
     }
-    ctx.fillText("Scroll to change y-range", canvas.width * DPR / 2, 20);
+    ctx.fillText("Scroll to change y-range", canvas.width / DPR / 2, 20);
     ctx.restore();
   }
 }
