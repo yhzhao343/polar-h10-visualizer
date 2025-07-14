@@ -40,6 +40,7 @@ import { SmoothieChart, TimeSeries } from "smoothie";
 import { CalcCascades, IirFilter } from "fili";
 
 const IIRCalc = new CalcCascades();
+const DPR = window.devicePixelRatio;
 
 type PostRenderCallback = (HTMLCanvasElement, number) => void;
 
@@ -1158,7 +1159,8 @@ function scroll_legend(canvas: HTMLCanvasElement, time: number) {
     if (EXG_PRESENTATION_OPTIONS.strokeStyle !== undefined) {
       ctx.fillStyle = "#fbfbfb";
     }
-    ctx.fillText("Scroll to change y-range", canvas.width / 2, 20);
+
+    ctx.fillText("Scroll to change y-range", (canvas.width * DPR) / 2, 20);
     ctx.restore();
   }
 }
