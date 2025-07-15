@@ -152,8 +152,8 @@ var require_smoothie = __commonJS({
           this.data.splice(0, removeCount);
         }
       };
-      function SmoothieChart2(options) {
-        this.options = Util.extend({}, SmoothieChart2.defaultChartOptions, options);
+      function SmoothieChart3(options) {
+        this.options = Util.extend({}, SmoothieChart3.defaultChartOptions, options);
         this.seriesSet = [];
         this.currentValueRange = 1;
         this.currentVisMinValue = 0;
@@ -162,8 +162,8 @@ var require_smoothie = __commonJS({
         this.mousemove = this.mousemove.bind(this);
         this.mouseout = this.mouseout.bind(this);
       }
-      SmoothieChart2.tooltipFormatter = function(timestamp, data) {
-        var timestampFormatter = this.options.timestampFormatter || SmoothieChart2.timeFormatter, elements = document.createElement("div"), label;
+      SmoothieChart3.tooltipFormatter = function(timestamp, data) {
+        var timestampFormatter = this.options.timestampFormatter || SmoothieChart3.timeFormatter, elements = document.createElement("div"), label;
         elements.appendChild(document.createTextNode(
           timestampFormatter(new Date(timestamp))
         ));
@@ -182,7 +182,7 @@ var require_smoothie = __commonJS({
         }
         return elements.innerHTML;
       };
-      SmoothieChart2.defaultChartOptions = {
+      SmoothieChart3.defaultChartOptions = {
         millisPerPixel: 20,
         enableDpiScaling: true,
         yMinFormatter: function(min, precision) {
@@ -231,12 +231,12 @@ var require_smoothie = __commonJS({
           lineWidth: 1,
           strokeStyle: "#BBBBBB"
         },
-        tooltipFormatter: SmoothieChart2.tooltipFormatter,
+        tooltipFormatter: SmoothieChart3.tooltipFormatter,
         nonRealtimeData: false,
         responsive: false,
         limitFPS: 0
       };
-      SmoothieChart2.AnimateCompatibility = /* @__PURE__ */ function() {
+      SmoothieChart3.AnimateCompatibility = /* @__PURE__ */ function() {
         var requestAnimationFrame = function(callback, element) {
           var requestAnimationFrame2 = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || function(callback2) {
             return window.setTimeout(function() {
@@ -255,12 +255,12 @@ var require_smoothie = __commonJS({
           cancelAnimationFrame
         };
       }();
-      SmoothieChart2.defaultSeriesPresentationOptions = {
+      SmoothieChart3.defaultSeriesPresentationOptions = {
         lineWidth: 1,
         strokeStyle: "#ffffff"
       };
-      SmoothieChart2.prototype.addTimeSeries = function(timeSeries, options) {
-        this.seriesSet.push({ timeSeries, options: Util.extend({}, SmoothieChart2.defaultSeriesPresentationOptions, options) });
+      SmoothieChart3.prototype.addTimeSeries = function(timeSeries, options) {
+        this.seriesSet.push({ timeSeries, options: Util.extend({}, SmoothieChart3.defaultSeriesPresentationOptions, options) });
         if (timeSeries.options.resetBounds && timeSeries.options.resetBoundsInterval > 0) {
           timeSeries.resetBoundsTimerId = setInterval(
             function() {
@@ -270,7 +270,7 @@ var require_smoothie = __commonJS({
           );
         }
       };
-      SmoothieChart2.prototype.removeTimeSeries = function(timeSeries) {
+      SmoothieChart3.prototype.removeTimeSeries = function(timeSeries) {
         var numSeries = this.seriesSet.length;
         for (var i = 0; i < numSeries; i++) {
           if (this.seriesSet[i].timeSeries === timeSeries) {
@@ -282,7 +282,7 @@ var require_smoothie = __commonJS({
           clearInterval(timeSeries.resetBoundsTimerId);
         }
       };
-      SmoothieChart2.prototype.getTimeSeriesOptions = function(timeSeries) {
+      SmoothieChart3.prototype.getTimeSeriesOptions = function(timeSeries) {
         var numSeries = this.seriesSet.length;
         for (var i = 0; i < numSeries; i++) {
           if (this.seriesSet[i].timeSeries === timeSeries) {
@@ -290,7 +290,7 @@ var require_smoothie = __commonJS({
           }
         }
       };
-      SmoothieChart2.prototype.bringToFront = function(timeSeries) {
+      SmoothieChart3.prototype.bringToFront = function(timeSeries) {
         var numSeries = this.seriesSet.length;
         for (var i = 0; i < numSeries; i++) {
           if (this.seriesSet[i].timeSeries === timeSeries) {
@@ -300,14 +300,14 @@ var require_smoothie = __commonJS({
           }
         }
       };
-      SmoothieChart2.prototype.streamTo = function(canvas, delayMillis) {
+      SmoothieChart3.prototype.streamTo = function(canvas, delayMillis) {
         this.canvas = canvas;
         this.clientWidth = parseInt(this.canvas.getAttribute("width"));
         this.clientHeight = parseInt(this.canvas.getAttribute("height"));
         this.delay = delayMillis;
         this.start();
       };
-      SmoothieChart2.prototype.getTooltipEl = function() {
+      SmoothieChart3.prototype.getTooltipEl = function() {
         if (!this.tooltipEl) {
           this.tooltipEl = document.createElement("div");
           this.tooltipEl.className = "smoothie-chart-tooltip";
@@ -318,7 +318,7 @@ var require_smoothie = __commonJS({
         }
         return this.tooltipEl;
       };
-      SmoothieChart2.prototype.updateTooltip = function() {
+      SmoothieChart3.prototype.updateTooltip = function() {
         if (!this.options.tooltip) {
           return;
         }
@@ -347,7 +347,7 @@ var require_smoothie = __commonJS({
           el.style.display = "none";
         }
       };
-      SmoothieChart2.prototype.mousemove = function(evt) {
+      SmoothieChart3.prototype.mousemove = function(evt) {
         this.mouseover = true;
         this.mouseX = evt.offsetX;
         this.mouseY = evt.offsetY;
@@ -361,13 +361,13 @@ var require_smoothie = __commonJS({
         el.style.left = Math.round(this.mousePageX) + "px";
         this.updateTooltip();
       };
-      SmoothieChart2.prototype.mouseout = function() {
+      SmoothieChart3.prototype.mouseout = function() {
         this.mouseover = false;
         this.mouseX = this.mouseY = -1;
         if (this.tooltipEl)
           this.tooltipEl.style.display = "none";
       };
-      SmoothieChart2.prototype.resize = function() {
+      SmoothieChart3.prototype.resize = function() {
         var dpr = !this.options.enableDpiScaling || !window ? 1 : window.devicePixelRatio, width, height;
         if (this.options.responsive) {
           width = this.canvas.offsetWidth;
@@ -406,14 +406,14 @@ var require_smoothie = __commonJS({
           }
         }
       };
-      SmoothieChart2.prototype.start = function() {
+      SmoothieChart3.prototype.start = function() {
         if (this.frame) {
           return;
         }
         this.canvas.addEventListener("mousemove", this.mousemove);
         this.canvas.addEventListener("mouseout", this.mouseout);
         var animate = function() {
-          this.frame = SmoothieChart2.AnimateCompatibility.requestAnimationFrame(function() {
+          this.frame = SmoothieChart3.AnimateCompatibility.requestAnimationFrame(function() {
             if (this.options.nonRealtimeData) {
               var dateZero = /* @__PURE__ */ new Date(0);
               var maxTimeStamp = this.seriesSet.reduce(function(max, series) {
@@ -436,15 +436,15 @@ var require_smoothie = __commonJS({
         }.bind(this);
         animate();
       };
-      SmoothieChart2.prototype.stop = function() {
+      SmoothieChart3.prototype.stop = function() {
         if (this.frame) {
-          SmoothieChart2.AnimateCompatibility.cancelAnimationFrame(this.frame);
+          SmoothieChart3.AnimateCompatibility.cancelAnimationFrame(this.frame);
           delete this.frame;
           this.canvas.removeEventListener("mousemove", this.mousemove);
           this.canvas.removeEventListener("mouseout", this.mouseout);
         }
       };
-      SmoothieChart2.prototype.updateValueRange = function() {
+      SmoothieChart3.prototype.updateValueRange = function() {
         var chartOptions = this.options, chartMaxValue = Number.NaN, chartMinValue = Number.NaN;
         for (var d = 0; d < this.seriesSet.length; d++) {
           var timeSeries = this.seriesSet[d].timeSeries;
@@ -483,7 +483,7 @@ var require_smoothie = __commonJS({
         }
         this.valueRange = { min: chartMinValue, max: chartMaxValue };
       };
-      SmoothieChart2.prototype.render = function(canvas, time) {
+      SmoothieChart3.prototype.render = function(canvas, time) {
         var nowMillis = Date.now();
         if (this.options.limitFPS > 0 && nowMillis - this.lastRenderTimeMillis < 1e3 / this.options.limitFPS)
           return;
@@ -682,14 +682,14 @@ var require_smoothie = __commonJS({
         }
         context.restore();
       };
-      SmoothieChart2.timeFormatter = function(date) {
+      SmoothieChart3.timeFormatter = function(date) {
         function pad2(number) {
           return (number < 10 ? "0" : "") + number;
         }
         return pad2(date.getHours()) + ":" + pad2(date.getMinutes()) + ":" + pad2(date.getSeconds());
       };
       exports2.TimeSeries = TimeSeries2;
-      exports2.SmoothieChart = SmoothieChart2;
+      exports2.SmoothieChart = SmoothieChart3;
     })(typeof exports === "undefined" ? exports : exports);
   }
 });
@@ -1253,6 +1253,42 @@ var require_fili_min = __commonJS({
     });
   }
 });
+
+// src/PolarH10VisualizerRow.ts
+var import_smoothie2 = __toESM(require_smoothie(), 1);
+
+// src/CustomSmoothie.ts
+var import_smoothie = __toESM(require_smoothie(), 1);
+var CustomSmoothie = class extends import_smoothie.SmoothieChart {
+  postRender;
+  constructor(option) {
+    super(option);
+    this.postRender = [];
+  }
+  render(canvas, time) {
+    super.render(canvas, time);
+    for (let callback of this.postRender) {
+      callback(canvas, time);
+    }
+  }
+  addPostRenderCallback = function(callback) {
+    const i = this.postRender.indexOf(callback);
+    if (i < 0) {
+      this.postRender.push(callback);
+    }
+  };
+  removePostRenderCallback = function(callback) {
+    const i = this.postRender.indexOf(callback);
+    if (i > -1) {
+      return this.postRender.splice(i, 1);
+    } else {
+      return [];
+    }
+  };
+};
+
+// src/PolarH10VisualizerRow.ts
+var import_fili = __toESM(require_fili_min(), 1);
 
 // src/consts.ts
 var PMD_SERVICE_ID = "fb005c80-02e7-f387-1cad-8acd2d8df0c8";
@@ -1835,98 +1871,15 @@ var PolarH10 = class {
   };
 };
 
-// src/index.ts
-var import_smoothie = __toESM(require_smoothie(), 1);
-var import_fili = __toESM(require_fili_min(), 1);
+// src/PolarH10VisualizerRow.ts
+var polarRowID = 0;
 var IIRCalc = new import_fili.CalcCascades();
 var DPR = window.devicePixelRatio;
-var polarRowID = 0;
-function CustomSmoothie(option) {
-  import_smoothie.SmoothieChart.call(this, option);
-  this.postRender = [];
-}
-CustomSmoothie.prototype = Object.create(import_smoothie.SmoothieChart.prototype);
-CustomSmoothie.prototype.constructor = CustomSmoothie;
-CustomSmoothie.prototype.render = function(canvas, time) {
-  import_smoothie.SmoothieChart.prototype.render.call(this, canvas, time);
-  for (let callback of this.postRender) {
-    callback(canvas, time);
-  }
-};
-CustomSmoothie.prototype.addPostRenderCallback = function(callback) {
-  const i = this.postRender.indexOf(callback);
-  if (i < 0) {
-    this.postRender.push(callback);
-  }
-};
-CustomSmoothie.prototype.removePostRenderCallback = function(callback) {
-  const i = this.postRender.indexOf(callback);
-  if (i > -1) {
-    return this.postRender.splice(i, 1);
-  } else {
-    return [];
-  }
-};
-var webapp_container = document.createElement("div");
-webapp_container.id = "webapp_container";
-webapp_container.classList.add("container");
-document.body.appendChild(webapp_container);
-var top_bar_div = document.createElement("div");
-top_bar_div.id = "top_bar_div";
-webapp_container.appendChild(top_bar_div);
-var title = document.createElement("h3");
-title.textContent = "Polar H10 raw data visualizer";
-title.classList.add("title");
-top_bar_div.appendChild(title);
-top_bar_div.classList.add("center");
-var ble_conn_id = "ble_connect_btn";
-var ble_conn_btn = document.createElement("button");
-ble_conn_btn.setAttribute("data-tooltip", "Connect new Polar H10");
-ble_conn_btn.id = ble_conn_id;
-ble_conn_btn.classList.add(
-  "btn",
-  "btn-primary",
-  "btn-action",
-  "s-circle",
-  "ble-conn"
-);
-var content = document.createElement("div");
-content.id = "content_div";
-content.classList.add("flexbox", "content");
-webapp_container.appendChild(content);
-if (navigator.bluetooth === void 0) {
-  const debug_message = document.createElement("p");
-  debug_message.innerHTML = 'Web Bluetooth API is not present!<br>\nPlease make sure you are using the latest chrome/chromium based browser.<br>\nAlso make sure to enable experimental-web-platform-features in your browser <a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a> ';
-  debug_message.setAttribute("style", "margin:5% 20%;font-size:1.4em;");
-  content.appendChild(debug_message);
-  window.stop();
-}
-var plus_icon = document.createElement("i");
-plus_icon.setAttribute("class", "icon icon-plus");
-ble_conn_btn.appendChild(plus_icon);
-ble_conn_btn.addEventListener("click", polarConnect);
-top_bar_div.appendChild(ble_conn_btn);
-async function polarConnect() {
-  let device;
-  try {
-    device = await navigator.bluetooth.requestDevice({
-      filters: [{ namePrefix: "Polar" }],
-      optionalServices: [
-        "battery_service",
-        "fb005c80-02e7-f387-1cad-8acd2d8df0c8"
-      ]
-    });
-  } catch (err) {
-    console.log(err);
-    return;
-  }
-  if (device.gatt?.connected) {
-    return;
-  }
+async function createPolarVisRow(content2, device) {
   const polarSensorDiv = document.createElement("div");
   polarSensorDiv.id = `polarSensorDiv-${polarRowID}`;
   polarSensorDiv.classList.add("polar-sensor-row", "flexbox");
-  content.appendChild(polarSensorDiv);
+  content2.appendChild(polarSensorDiv);
   const optionDiv = document.createElement("div");
   optionDiv.id = `optionDiv-${polarRowID}`;
   optionDiv.classList.add("polar-sensor-left-panel", "center");
@@ -1950,8 +1903,8 @@ async function polarConnect() {
   } catch (err) {
     console.log(err);
     alert(err);
-    if (content.contains(polarSensorDiv)) {
-      content.removeChild(polarSensorDiv);
+    if (content2.contains(polarSensorDiv)) {
+      content2.removeChild(polarSensorDiv);
     }
     return;
   }
@@ -2068,8 +2021,8 @@ async function polarConnect() {
   let acc_z_iir = void 0;
   const disconnectPolarH10 = () => {
     device.gatt?.disconnect();
-    if (content.contains(polarSensorDiv)) {
-      content.removeChild(polarSensorDiv);
+    if (content2.contains(polarSensorDiv)) {
+      content2.removeChild(polarSensorDiv);
     }
     if (ecg_chart !== void 0) {
       ecg_chart.stop();
@@ -2171,11 +2124,11 @@ async function polarConnect() {
       ecg_canvas.id = `ecg_canvas-${polarRowID}`;
       ECGDiv.appendChild(ecg_canvas);
       ecg_chart = new CustomSmoothie(DEFAULT_EXG_LINE_CHART_OPTION);
-      ecg_ts = new import_smoothie.TimeSeries();
+      ecg_ts = new import_smoothie2.TimeSeries();
       ecg_chart.addTimeSeries(ecg_ts, EXG_PRESENTATION_OPTIONS);
       ecg_chart.streamTo(ecg_canvas, EXG_STREAM_DELAY_MS);
-      ecg_rms_ts = new import_smoothie.TimeSeries();
-      ecg_hp_ts = new import_smoothie.TimeSeries();
+      ecg_rms_ts = new import_smoothie2.TimeSeries();
+      ecg_hp_ts = new import_smoothie2.TimeSeries();
       ecg_chart.addPostRenderCallback(exg_legend);
       ecg_rms_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
       ecg_rms_win_i = 0;
@@ -2272,9 +2225,9 @@ async function polarConnect() {
       acc_canvas.id = `acc_canvas-${polarRowID}`;
       ACCDiv.appendChild(acc_canvas);
       acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
-      acc_x_ts = new import_smoothie.TimeSeries();
-      acc_y_ts = new import_smoothie.TimeSeries();
-      acc_z_ts = new import_smoothie.TimeSeries();
+      acc_x_ts = new import_smoothie2.TimeSeries();
+      acc_y_ts = new import_smoothie2.TimeSeries();
+      acc_z_ts = new import_smoothie2.TimeSeries();
       acc_chart.addTimeSeries(acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
       acc_chart.addTimeSeries(acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
       acc_chart.addTimeSeries(acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
@@ -2286,12 +2239,12 @@ async function polarConnect() {
           acc_chart.removePostRenderCallback(scroll_legend);
         }
       }, SCROLL_LEGENT_DISP_TIME_MS);
-      acc_x_lp_ts = new import_smoothie.TimeSeries();
-      acc_y_lp_ts = new import_smoothie.TimeSeries();
-      acc_z_lp_ts = new import_smoothie.TimeSeries();
-      acc_rho_ts = new import_smoothie.TimeSeries();
-      acc_phi_ts = new import_smoothie.TimeSeries();
-      acc_theta_ts = new import_smoothie.TimeSeries();
+      acc_x_lp_ts = new import_smoothie2.TimeSeries();
+      acc_y_lp_ts = new import_smoothie2.TimeSeries();
+      acc_z_lp_ts = new import_smoothie2.TimeSeries();
+      acc_rho_ts = new import_smoothie2.TimeSeries();
+      acc_phi_ts = new import_smoothie2.TimeSeries();
+      acc_theta_ts = new import_smoothie2.TimeSeries();
       acc_resize = resizeSmoothieGen(acc_chart, 1, 1);
       acc_resize_observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
@@ -2814,6 +2767,71 @@ function addOptionsToSelect(select, options) {
     option.textContent = option_str;
     select.appendChild(option);
   }
+}
+
+// src/index.ts
+var webapp_container = document.createElement("div");
+webapp_container.id = "webapp_container";
+webapp_container.classList.add("container");
+document.body.appendChild(webapp_container);
+var top_bar_div = document.createElement("div");
+top_bar_div.id = "top_bar_div";
+webapp_container.appendChild(top_bar_div);
+var title = document.createElement("h3");
+title.textContent = "Polar H10 raw data visualizer";
+title.classList.add("title");
+top_bar_div.appendChild(title);
+top_bar_div.classList.add("center");
+var ble_conn_id = "ble_connect_btn";
+var ble_conn_btn = document.createElement("button");
+ble_conn_btn.setAttribute("data-tooltip", "Connect new Polar H10");
+ble_conn_btn.id = ble_conn_id;
+ble_conn_btn.classList.add(
+  "btn",
+  "btn-primary",
+  "btn-action",
+  "s-circle",
+  "ble-conn"
+);
+var content = document.createElement("div");
+content.id = "content_div";
+content.classList.add("flexbox", "content");
+webapp_container.appendChild(content);
+if (navigator.bluetooth === void 0) {
+  const debug_message = document.createElement("p");
+  debug_message.innerHTML = 'Web Bluetooth API is not present!<br>\nPlease make sure you are using the latest chrome/chromium based browser.<br>\nAlso make sure to enable experimental-web-platform-features in your browser <a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a> ';
+  debug_message.setAttribute("style", "margin:5% 20%;font-size:1.4em;");
+  content.appendChild(debug_message);
+  window.stop();
+}
+var plus_icon = document.createElement("i");
+plus_icon.setAttribute("class", "icon icon-plus");
+ble_conn_btn.appendChild(plus_icon);
+ble_conn_btn.addEventListener(
+  "click",
+  polarConnectHandleGen(content, createPolarVisRow)
+);
+top_bar_div.appendChild(ble_conn_btn);
+function polarConnectHandleGen(parentCoponent, btDeviceHandler) {
+  return async (ev) => {
+    let device;
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ namePrefix: "Polar" }],
+        optionalServices: [
+          "battery_service",
+          "fb005c80-02e7-f387-1cad-8acd2d8df0c8"
+        ]
+      });
+    } catch (err) {
+      console.log(err);
+      return;
+    }
+    if (device.gatt?.connected) {
+      return;
+    }
+    btDeviceHandler(parentCoponent, device);
+  };
 }
 /*! Bundled license information:
 
