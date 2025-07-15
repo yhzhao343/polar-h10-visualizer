@@ -1840,6 +1840,7 @@ var import_smoothie = __toESM(require_smoothie(), 1);
 var import_fili = __toESM(require_fili_min(), 1);
 var IIRCalc = new import_fili.CalcCascades();
 var DPR = window.devicePixelRatio;
+var polarRowID = 0;
 function CustomSmoothie(option) {
   import_smoothie.SmoothieChart.call(this, option);
   this.postRender = [];
@@ -1888,19 +1889,23 @@ ble_conn_btn.classList.add(
   "btn-action",
   "s-circle",
   "ble-conn"
-  // "tooltip",
-  // "tooltip-right",
 );
+var content = document.createElement("div");
+content.id = "content_div";
+content.classList.add("flexbox", "content");
+webapp_container.appendChild(content);
+if (navigator.bluetooth === void 0) {
+  const debug_message = document.createElement("p");
+  debug_message.innerHTML = 'Web Bluetooth API is not present!<br>\nPlease make sure you are using the latest chrome/chromium based browser.<br>\nAlso make sure to enable experimental-web-platform-features in your browser <a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a> ';
+  debug_message.setAttribute("style", "margin:5% 20%;font-size:1.4em;");
+  content.appendChild(debug_message);
+  window.stop();
+}
 var plus_icon = document.createElement("i");
 plus_icon.setAttribute("class", "icon icon-plus");
 ble_conn_btn.appendChild(plus_icon);
 ble_conn_btn.addEventListener("click", polarConnect);
 top_bar_div.appendChild(ble_conn_btn);
-var content = document.createElement("div");
-content.id = "content_div";
-content.classList.add("flexbox", "content");
-webapp_container.appendChild(content);
-var polarRowID = 0;
 async function polarConnect() {
   let device;
   try {
