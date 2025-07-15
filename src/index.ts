@@ -41,6 +41,7 @@ import { CalcCascades, IirFilter } from "fili";
 
 const IIRCalc = new CalcCascades();
 const DPR = window.devicePixelRatio;
+let polarRowID = 0;
 
 type PostRenderCallback = (HTMLCanvasElement, number) => void;
 
@@ -107,24 +108,31 @@ ble_conn_btn.classList.add(
   "btn-action",
   "s-circle",
   "ble-conn",
-  // "tooltip",
-  // "tooltip-right",
 );
-// ble_conn_btn.setAttribute("id", ble_conn_id);
-// ble_conn_btn.setAttribute("class", "btn btn-primary btn-action s-circle");
-// ble_conn_btn.setAttribute("style", "float:left; margin: 10px;");
-const plus_icon = document.createElement("i");
-plus_icon.setAttribute("class", "icon icon-plus");
-ble_conn_btn.appendChild(plus_icon);
-ble_conn_btn.addEventListener("click", polarConnect);
-top_bar_div.appendChild(ble_conn_btn);
 
 const content = document.createElement("div");
 content.id = "content_div";
 content.classList.add("flexbox", "content");
 webapp_container.appendChild(content);
 
-let polarRowID = 0;
+if (navigator.bluetooth === undefined) {
+  const debug_message = document.createElement("p");
+
+  debug_message.innerHTML =
+    "Web Bluetooth API is not present!<br>\n" +
+    "Please make sure you are using the latest chrome/chromium based browser.<br>\n" +
+    'Also make sure to enable experimental-web-platform-features in your browser <a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a> ';
+  debug_message.setAttribute("style", "margin:5% 20%;font-size:1.4em;");
+  content.appendChild(debug_message);
+
+  window.stop();
+}
+
+const plus_icon = document.createElement("i");
+plus_icon.setAttribute("class", "icon icon-plus");
+ble_conn_btn.appendChild(plus_icon);
+ble_conn_btn.addEventListener("click", polarConnect);
+top_bar_div.appendChild(ble_conn_btn);
 
 async function polarConnect() {
   let device: BluetoothDevice;
