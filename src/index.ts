@@ -75,3 +75,11 @@ function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
     btDeviceHandler(parentCoponent, device);
   };
 }
+
+function location_reload() {
+  location.reload();
+  console.log("Page reloaded");
+}
+if (!(window as any).IS_PRODUCTION) {
+  new EventSource("/esbuild").addEventListener("change", location_reload);
+}

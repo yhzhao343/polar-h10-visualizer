@@ -32,18 +32,6 @@
       /******************************************************************************
        * esbuild live-reload                                                        *
        ******************************************************************************/
-      function location_reload() {
-        location.reload();
-        console.log("Page reloaded");
-      }
-      if (window.IS_PRODUCTION !== undefined) {
-        if (!window.IS_PRODUCTION) {
-          new EventSource("/esbuild").addEventListener(
-            "change",
-            location_reload,
-          );
-        }
-      }
     </script>
   </body>
 </html>

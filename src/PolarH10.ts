@@ -45,36 +45,38 @@ export class PolarH10 {
     }
   }
 
-  addEventListener = (
+  addEventListener(
     type: (typeof PolarSensorNames)[number],
     handler: (data: PolarH10Data) => void,
-  ) => {
+  ) {
     if (!this.dataHandle[type].includes(handler)) {
       this.dataHandle[type].push(handler);
     }
-  };
+  }
 
-  removeEventListener = (
+  removeEventListener(
     type: (typeof PolarSensorNames)[number],
     handler: (data: PolarH10Data) => void,
-  ) => {
-    if (this.dataHandle[type].includes(handler)) {
-      this.dataHandle[type].splice(this.dataHandle[type].indexOf(handler), 1);
+  ) {
+    let index = this.dataHandle[type].indexOf(handler);
+    if (index > -1) {
+      this.dataHandle[type].splice(index, 1);
     }
-  };
+    return index;
+  }
 
-  clearEventListner = (type: (typeof PolarSensorNames)[number]) => {
+  clearEventListner(type: (typeof PolarSensorNames)[number]) {
     delete this.dataHandle[type];
     this.dataHandle[type] = [];
-  };
+  }
 
-  log = (...o: any[]) => {
+  log(...o: any[]) {
     if (this.verbose) {
       console.log(...o);
     }
-  };
+  }
 
-  init = async () => {
+  async init() {
     this.server = await this.device.gatt?.connect();
     this.log(`Connecting to ${this.device.name} GATT server...`);
     this.PMDService = await this.server?.getPrimaryService(PMD_SERVICE_ID);
@@ -96,33 +98,30 @@ export class PolarH10 {
 
     this.PMDDataChar?.addEventListener(
       "characteristicvaluechanged",
-      this.PMDDataHandle,
+      this.PMDDataHandle.bind(this),
     );
-  };
+  }
 
-  PMDCtrlCharHandle = (event: any) => {
-    this.log("PMDCtrlCharHandle");
+  PMDCtrlCharHandle(event: any) {
     this.log(event);
-  };
+  }
 
-  PMDCtrlDataHandle = (event: Event) => {
-    this.log("PMDCtrlDataHandle");
+  PMDCtrlDataHandle(event: Event) {
     this.log(event);
-  };
+  }
 
-  getBatteryLevel = async (): Promise<number> => {
+  async getBatteryLevel(): Promise<number> {
     let battRead = await this.BattLvlChar?.readValue();
     if (battRead) {
       return battRead.getUint8(0);
     } else {
       return 0;
     }
-  };
+  }
 
-  getPMDFeatures = async (): Promise<typeof PolarSensorNames> => {
+  async getPMDFeatures(): Promise<typeof PolarSensorNames> {
     const PMEFeatures: DataView | undefined =
       await this.PMDCtrlChar?.readValue();
-    // const featureList: (keyof typeof PolarSensorType)[] = [];
     const featureList: typeof PolarSensorNames = [];
     if (PMEFeatures !== undefined) {
       if (PMEFeatures.byteLength === 17) {
@@ -139,15 +138,15 @@ export class PolarH10 {
     }
 
     return featureList;
-  };
+  }
 
-  getSensorSettingsFromName = async (
+  async getSensorSettingsFromName(
     sensorName: keyof typeof PolarSensorType,
-  ): Promise<PolarSensorInfo | undefined> => {
+  ): Promise<PolarSensorInfo | undefined> {
     return this.getSensorSettingsFromId(PolarSensorType[sensorName]);
-  };
+  }
 
-  parseSensorSettings = (val: DataView) => {
+  parseSensorSettings(val: DataView) {
     if (
       val.getUint8(0) == 0xf0 &&
       val.getUint8(1) == PolarPMDCommand.GET_MEASUREMENT_SETTINGS
@@ -175,11 +174,11 @@ export class PolarH10 {
       }
       return info;
     }
-  };
+  }
 
-  getSensorSettingsFromId = async (
+  async getSensorSettingsFromId(
     sensorId: PolarSensorType,
-  ): Promise<PolarSensorInfo | undefined> => {
+  ): Promise<PolarSensorInfo | undefined> {
     if (!this.streaming) {
       let sensorSettingPromiseRSLV: (value: any | PromiseLike<any>) => void;
       const sensorSettingPromise: Promise<PolarSensorInfo | undefined> =
@@ -202,10 +201,9 @@ export class PolarH10 {
       await this.PMDCtrlChar?.writeValue(cmd_buf);
       return await sensorSettingPromise;
     }
-  };
+  }
 
-  PMDDataHandle = (event: any) => {
-    // console.log(event);
+  PMDDataHandle(event: any) {
     const val: DataView = event.target.value;
     const dataTimeStamp = val.getBigUint64(1, true);
     if (this.timeOffset === BigInt(0)) {
@@ -226,7 +224,6 @@ export class PolarH10 {
     switch (type) {
       case PolarSensorType.ACC:
         if (frame_type == 1) {
-          // const numFrames = Math.floor((val.byteLength - 10) / 2);
           dataFrame.samples = new Int16Array(val.buffer.slice(10));
           dataFrame.prev_sample_timestamp_ms = this.lastACCTimestamp;
           this.lastACCTimestamp = offset_timestamp;
@@ -255,9 +252,9 @@ export class PolarH10 {
     for (const handler of this.dataHandle[PolarSensorType[type]]) {
       handler(dataFrame);
     }
-  };
+  }
 
-  parseCtrlReply = (val: DataView): PMDCtrlReply | undefined => {
+  parseCtrlReply(val: DataView): PMDCtrlReply | undefined {
     if (val.getUint8(0) === 0xf0) {
       const polar_cmd = val.getUint8(1);
       if (
@@ -276,13 +273,13 @@ export class PolarH10 {
         return startReply;
       }
     }
-  };
+  }
 
-  startACC = async (
+  async startACC(
     rangeG: number = 4,
     sample_rate: number = 100,
     resolution: number = 16,
-  ): Promise<PMDCtrlReply | undefined> => {
+  ): Promise<PMDCtrlReply | undefined> {
     if (this.ACCStarted) {
       return;
     }
@@ -327,12 +324,12 @@ export class PolarH10 {
       this.ACCStarted = true;
     }
     return startReply;
-  };
+  }
 
-  startECG = async (
+  async startECG(
     sample_rate: number = 130,
     resolution: number = 14,
-  ): Promise<PMDCtrlReply | undefined> => {
+  ): Promise<PMDCtrlReply | undefined> {
     if (this.ECGStarted) {
       return;
     }
@@ -372,9 +369,9 @@ export class PolarH10 {
       this.ECGStarted = true;
     }
     return startReply;
-  };
+  }
 
-  stopECG = async () => {
+  async stopECG() {
     if (!this.ECGStarted) {
       return;
     }
@@ -385,9 +382,9 @@ export class PolarH10 {
       this.ECGStarted = false;
     }
     return endReply;
-  };
+  }
 
-  stopACC = async () => {
+  async stopACC() {
     if (!this.ACCStarted) {
       return;
     }
@@ -398,9 +395,9 @@ export class PolarH10 {
       this.ACCStarted = false;
     }
     return endReply;
-  };
+  }
 
-  stopSensor = async (sensorType: PolarSensorType) => {
+  async stopSensor(sensorType: PolarSensorType) {
     let endSensorRSLV: (value: any | PromiseLike<any>) => void;
     const endACCPromise: Promise<PMDCtrlReply | undefined> = new Promise(
       (rslv, rjct) => {
@@ -423,5 +420,5 @@ export class PolarH10 {
     cmd_buf[1] = sensorType;
     await this.PMDCtrlChar?.writeValue(cmd_buf);
     return await endACCPromise;
-  };
+  }
 }

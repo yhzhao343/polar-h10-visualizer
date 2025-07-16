@@ -40,7 +40,6 @@ import {
   LOW_BATT_LVL,
 } from "./consts";
 
-// let polarRowID = 0;
 const IIRCalc = new CalcCascades();
 const DPR = window.devicePixelRatio;
 
@@ -352,6 +351,7 @@ class PolarVisRow {
     );
     this.EXGFormSelect.selectedIndex = 0;
     this.EXGFormSelect.onchange = this.changeEXGGraph.bind(this);
+    this.EXGFormSelect.disabled = true;
 
     this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
     const ACC_switch = createSwitch("ACC", this.onToggleACC.bind(this));
@@ -369,6 +369,7 @@ class PolarVisRow {
     );
     this.ACCFormSelect.selectedIndex = 0;
     this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
+    this.ACCFormSelect.disabled = true;
   }
 
   async onToggleECG(ev: any) {
@@ -488,6 +489,8 @@ class PolarVisRow {
         "almost-full-height",
         width_class,
       ]);
+
+      this.ACCDiv.addEventListener("wheel", this.onWheelACC.bind(this));
 
       this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
 
