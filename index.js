@@ -1397,6 +1397,7 @@ var ERROR_MSGS = [
   "INVALID STATE",
   "DEVICE IN CHARGER"
 ];
+var LOW_BATT_LVL = 40;
 var EXG_STREAM_DELAY_MS = 600;
 var EXG_RMS_WINDOW_MS = 200;
 var EXG_RMS_WINDOW_SIZE = Math.round(130 / (1e3 / EXG_RMS_WINDOW_MS));
@@ -1538,7 +1539,6 @@ var PolarH10 = class {
   streaming = false;
   verbose = true;
   dataHandle = {};
-  // dataHandle: ((data: PolarH10Data) => void)[];
   timeOffset = BigInt(0);
   eventTimeOffset;
   lastECGTimestamp;
@@ -1872,406 +1872,456 @@ var PolarH10 = class {
 };
 
 // src/PolarH10VisualizerRow.ts
-var polarRowID = 0;
 var IIRCalc = new import_fili.CalcCascades();
 var DPR = window.devicePixelRatio;
+var PolarVisRows = [];
 async function createPolarVisRow(content2, device) {
-  const polarSensorDiv = document.createElement("div");
-  polarSensorDiv.id = `polarSensorDiv-${polarRowID}`;
-  polarSensorDiv.classList.add("polar-sensor-row", "flexbox");
-  content2.appendChild(polarSensorDiv);
-  const optionDiv = document.createElement("div");
-  optionDiv.id = `optionDiv-${polarRowID}`;
-  optionDiv.classList.add("polar-sensor-left-panel", "center");
-  polarSensorDiv.appendChild(optionDiv);
-  const nameDiv = document.createElement("div");
-  nameDiv.id = `device-name-batt-${polarRowID}`;
-  nameDiv.classList.add("center", "flexbox");
-  let DeviceName;
-  if (device.name) {
-    DeviceName = device.name.substring(10);
-    nameDiv.textContent = `Conneting ${DeviceName}`;
-  }
-  optionDiv.appendChild(nameDiv);
-  const loadingDiv = document.createElement("div");
-  loadingDiv.classList.add("loading", "loading-lg", "full-width", "flexbox");
-  optionDiv.appendChild(loadingDiv);
-  let polarH10;
-  try {
-    polarH10 = new PolarH10(device);
-    await polarH10.init();
-  } catch (err) {
-    console.log(err);
-    alert(err);
-    if (content2.contains(polarSensorDiv)) {
-      content2.removeChild(polarSensorDiv);
+  const row = new PolarVisRow(content2, device);
+  await row.init();
+  PolarVisRows.push(row);
+}
+var PolarVisRow = class _PolarVisRow {
+  static polarRowID = 0;
+  device;
+  polarH10;
+  deviceName;
+  battLvl;
+  parent;
+  polarSensorDiv;
+  optionDiv;
+  nameDiv;
+  loadingDiv;
+  disconnectDiv;
+  dataInfo;
+  bodypartLabel;
+  bodypartSelectDiv;
+  bodypartSelect;
+  dataCtrl;
+  visContainerDiv;
+  EXGCtrlDiv;
+  ACCCtrlDiv;
+  EXG_HP_MIN = EXG_HP_MIN;
+  EXG_HP_MAX = EXG_HP_MAX;
+  EXG_RMS_MIN = EXG_RMS_MIN;
+  EXG_RMS_MAX = EXG_RMS_MAX;
+  ACC_MIN = ACC_MIN;
+  ACC_MAX = ACC_MAX;
+  EXGFormSelect;
+  EXGSwitchInput;
+  EXGDropDown;
+  ACCFormSelect;
+  ACCSwitchInput;
+  ACCDropDown;
+  ECGDiv = void 0;
+  ACCDiv = void 0;
+  ecg_resize = void 0;
+  ecg_chart = void 0;
+  ecg_ts = void 0;
+  ecg_hp_ts = void 0;
+  ecg_rms_win = void 0;
+  ecg_rms_win_i = 0;
+  ecg_rms_ts = void 0;
+  ecg_resize_observer = void 0;
+  ecg_rms_iir_coef = void 0;
+  ecg_rms_iir = void 0;
+  ecg_canvas = void 0;
+  acc_resize = void 0;
+  acc_chart = void 0;
+  acc_x_ts = void 0;
+  acc_y_ts = void 0;
+  acc_z_ts = void 0;
+  acc_x_lp_ts = void 0;
+  acc_y_lp_ts = void 0;
+  acc_z_lp_ts = void 0;
+  acc_rho_ts = void 0;
+  acc_phi_ts = void 0;
+  acc_theta_ts = void 0;
+  acc_resize_observer = void 0;
+  acc_canvas = void 0;
+  acc_iir_coef = void 0;
+  acc_x_iir = void 0;
+  acc_y_iir = void 0;
+  acc_z_iir = void 0;
+  newECGCallback;
+  newACCCallback;
+  constructor(content2, device) {
+    if (device.name === void 0) {
+      throw new Error("Invalid Bluetooth device! Missing name");
     }
-    return;
+    this.parent = content2;
+    this.device = device;
+    this.deviceName = this.device?.name?.substring(10) || "";
+    this.newECGCallback = this._newECGCallback.bind(this);
+    this.newACCCallback = this._newACCCallback.bind(this);
   }
-  const battLvl = await polarH10.getBatteryLevel();
-  optionDiv.removeChild(loadingDiv);
-  optionDiv.removeChild(nameDiv);
-  optionDiv.classList.remove("center");
-  if (device.name) {
-    nameDiv.textContent = "";
-    nameDiv.classList.add("flex");
+  async init() {
+    try {
+      await this.initPolarH10();
+      await this.initDeviceInfo();
+      await this.initDeviceGraphCtrl();
+    } catch (err) {
+      this.disconnectPolarH10();
+      alert(err);
+    }
+    _PolarVisRow.polarRowID += 1;
+  }
+  async initPolarH10() {
+    this.polarSensorDiv = createDiv(`polarSensorDiv`, this.parent, [
+      "polar-sensor-row",
+      "flexbox"
+    ]);
+    this.optionDiv = createDiv(`optionDiv`, this.polarSensorDiv, [
+      "polar-sensor-left-panel",
+      "center"
+    ]);
+    this.nameDiv = createDiv(
+      `device-name-batt`,
+      this.optionDiv,
+      ["center", "flexbox"],
+      `Conneting ${this.deviceName}...`
+    );
+    this.loadingDiv = createDiv("ConnectLoading", this.optionDiv, [
+      "loading",
+      "loading-lg",
+      "full-width",
+      "flexbox"
+    ]);
+    try {
+      this.polarH10 = new PolarH10(this.device);
+      await this.polarH10.init();
+    } catch (err) {
+      console.log(err);
+      alert(err);
+      if (this.parent.contains(this.polarSensorDiv)) {
+        this.parent.removeChild(this.polarSensorDiv);
+      }
+      throw new Error("polarH10 device initialization failed!");
+    }
+  }
+  async disconnectPolarH10(ev = void 0) {
+    this.device.gatt?.disconnect();
+    if (this.parent.contains(this.polarSensorDiv)) {
+      this.parent.removeChild(this.polarSensorDiv);
+    }
+    if (this.ecg_chart !== void 0) {
+      this.ecg_chart.stop();
+    }
+    if (this.ecg_resize_observer !== void 0) {
+      this.ecg_resize_observer.disconnect();
+    }
+    if (this.ECGDiv !== void 0) {
+      this.visContainerDiv?.removeChild(this.ECGDiv);
+    }
+    this.resetECG();
+    if (this.acc_chart !== void 0) {
+      this.acc_chart.stop();
+    }
+    if (this.acc_resize_observer !== void 0) {
+      this.acc_resize_observer.disconnect();
+    }
+    if (this.ACCDiv !== void 0) {
+      this.visContainerDiv?.removeChild(this.ACCDiv);
+    }
+    this.resetACC();
+  }
+  resetECG() {
+    this.ecg_canvas = void 0;
+    this.ECGDiv = void 0;
+    this.ecg_resize = void 0;
+    this.ecg_rms_win = void 0;
+    this.ecg_chart = void 0;
+    this.ecg_ts = void 0;
+    this.ecg_hp_ts = void 0;
+    this.ecg_rms_ts = void 0;
+    this.ecg_resize_observer = void 0;
+    this.ecg_rms_iir_coef = void 0;
+    this.ecg_rms_iir = void 0;
+    this.ecg_rms_win_i = 0;
+  }
+  resetACC() {
+    this.ACCDiv = void 0;
+    this.acc_resize = void 0;
+    this.acc_canvas = void 0;
+    this.acc_chart = void 0;
+    this.acc_x_ts = void 0;
+    this.acc_y_ts = void 0;
+    this.acc_z_ts = void 0;
+    this.acc_resize_observer = void 0;
+    this.acc_iir_coef = void 0;
+    this.acc_x_iir = void 0;
+    this.acc_y_iir = void 0;
+    this.acc_z_iir = void 0;
+    this.acc_x_lp_ts = void 0;
+    this.acc_y_lp_ts = void 0;
+    this.acc_z_lp_ts = void 0;
+    this.acc_rho_ts = void 0;
+    this.acc_phi_ts = void 0;
+    this.acc_theta_ts = void 0;
+  }
+  async initDeviceInfo() {
+    this.disconnectDiv = createDiv("disconnectDiv", void 0, [
+      "flexbox",
+      "disconnect"
+    ]);
+    const disBtn = document.createElement("button");
+    const delIcon = document.createElement("i");
+    delIcon.classList.add("icon", "icon-delete");
+    disBtn.appendChild(delIcon);
+    disBtn.setAttribute("data-tooltip", "disconnect");
+    disBtn.classList.add(
+      "btn",
+      "btn-primary",
+      "btn-sm",
+      "s-circle",
+      "tooltip",
+      "tooltip-top"
+    );
+    this.disconnectDiv.appendChild(disBtn);
+    disBtn.addEventListener("click", this.disconnectPolarH10.bind(this));
+    this.battLvl = await this.polarH10.getBatteryLevel();
+    this.optionDiv.removeChild(this.loadingDiv);
+    this.optionDiv.removeChild(this.nameDiv);
+    this.optionDiv.classList.remove("center");
+    this.nameDiv.textContent = "";
+    this.nameDiv.classList.add("flex");
     const deviceNameDiv = document.createElement("div");
-    deviceNameDiv.textContent = DeviceName;
+    deviceNameDiv.textContent = this.deviceName;
     deviceNameDiv.classList.add("padright-5px", "flexbox");
-    nameDiv.appendChild(deviceNameDiv);
+    this.nameDiv.appendChild(deviceNameDiv);
     let battStr;
-    if (battLvl > 30) {
-      battStr = `\u{1F50B}${battLvl}%`;
+    if (this.battLvl > LOW_BATT_LVL) {
+      battStr = `\u{1F50B}${this.battLvl}%`;
     } else {
-      battStr = `\u{1FAAB}${battLvl}%`;
+      battStr = `\u{1FAAB}${this.battLvl}%`;
     }
     const battLvlDiv = document.createElement("div");
     battLvlDiv.textContent = battStr;
     battLvlDiv.classList.add("flexbox");
-    nameDiv.appendChild(battLvlDiv);
+    this.nameDiv.appendChild(battLvlDiv);
+    this.nameDiv.classList.add("flexbox");
+    this.optionDiv.appendChild(this.disconnectDiv);
+    this.optionDiv.appendChild(this.nameDiv);
+    this.dataInfo = createDiv("dataInfo", this.optionDiv, [
+      "left",
+      "full-width",
+      "flexbox"
+    ]);
+    this.bodypartLabel = createDiv(
+      "bodypartLabel",
+      this.dataInfo,
+      ["half-width", "center"],
+      "Bodypart:"
+    );
+    this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
+      "half-width"
+    ]);
+    this.bodypartSelect = createSelect(
+      "bodypartSelect",
+      this.bodypartSelectDiv,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      BODY_PARTS,
+      getPolarRowId
+    );
+    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, [
+      "left",
+      "full-width",
+      "flexbox"
+    ]);
+    this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
+      "full-width",
+      "full-height"
+    ]);
   }
-  console.log(await polarH10.getSensorSettingsFromName("ACC"));
-  const disconnectDiv = document.createElement("div");
-  disconnectDiv.id = `disconnectDiv-${polarRowID}`;
-  optionDiv.appendChild(disconnectDiv);
-  disconnectDiv.classList.add("flexbox", "disconnect");
-  const disBtn = document.createElement("button");
-  const delIcon = document.createElement("i");
-  delIcon.classList.add("icon", "icon-delete");
-  disBtn.appendChild(delIcon);
-  disBtn.setAttribute("data-tooltip", "disconnect");
-  disBtn.classList.add(
-    "btn",
-    "btn-primary",
-    "btn-sm",
-    "s-circle",
-    "tooltip",
-    "tooltip-top"
-  );
-  disconnectDiv.appendChild(disBtn);
-  nameDiv.classList.add("flexbox");
-  optionDiv.appendChild(nameDiv);
-  const dataInfo = document.createElement("div");
-  dataInfo.classList.add("left", "full-width", "flexbox");
-  optionDiv.appendChild(dataInfo);
-  const bodypartLabel = document.createElement("div");
-  bodypartLabel.id = `bodypartLabel-${polarRowID}`;
-  bodypartLabel.textContent = "Bodypart:";
-  bodypartLabel.classList.add("half-width", "center");
-  dataInfo.appendChild(bodypartLabel);
-  const bodypartSelectDiv = document.createElement("div");
-  bodypartSelectDiv.id = `bodypartSelectDiv-${polarRowID}`;
-  bodypartSelectDiv.classList.add("half-width");
-  dataInfo.appendChild(bodypartSelectDiv);
-  const bodypartSelect = document.createElement("select");
-  bodypartSelect.id = `bodypartSelect-${polarRowID}`;
-  bodypartSelect.classList.add(
-    "form-select",
-    "dark-select",
-    "select-sm",
-    "almost-full-width"
-  );
-  bodypartSelectDiv.appendChild(bodypartSelect);
-  addOptionsToSelect(bodypartSelect, BODY_PARTS);
-  const dataCtrl = document.createElement("div");
-  dataCtrl.id = `dataCtrl-${polarRowID}`;
-  dataCtrl.classList.add("left", "full-width", "flexbox");
-  optionDiv.appendChild(dataCtrl);
-  let visContainerDiv = document.createElement("div");
-  visContainerDiv.id = `visContainer-${polarRowID}`;
-  polarSensorDiv.appendChild(visContainerDiv);
-  visContainerDiv.classList.add("full-width", "full-height");
-  let LOCAL_EXG_HP_MIN = EXG_HP_MIN;
-  let LOCAL_EXG_HP_MAX = EXG_HP_MAX;
-  let LOCAL_EXG_RMS_MIN = EXG_RMS_MIN;
-  let LOCAL_EXG_RMS_MAX = EXG_RMS_MAX;
-  let LOCAL_ACC_MIN = ACC_MIN;
-  let LOCAL_ACC_MAX = ACC_MAX;
-  let EXGFormSelect = void 0;
-  let ACCFormSelect = void 0;
-  let ECGDiv = void 0;
-  let ACCDiv = void 0;
-  let ecg_resize = void 0;
-  let ecg_chart = void 0;
-  let ecg_ts = void 0;
-  let ecg_hp_ts = void 0;
-  let ecg_rms_win = void 0;
-  let ecg_rms_win_i = 0;
-  let ecg_rms_ts = void 0;
-  let ecg_resize_observer = void 0;
-  let ecg_rms_iir_coef = void 0;
-  let ecg_rms_iir = void 0;
-  let ecg_canvas = void 0;
-  let acc_resize = void 0;
-  let acc_chart = void 0;
-  let acc_x_ts = void 0;
-  let acc_y_ts = void 0;
-  let acc_z_ts = void 0;
-  let acc_x_lp_ts = void 0;
-  let acc_y_lp_ts = void 0;
-  let acc_z_lp_ts = void 0;
-  let acc_rho_ts = void 0;
-  let acc_phi_ts = void 0;
-  let acc_theta_ts = void 0;
-  let acc_resize_observer = void 0;
-  let acc_canvas = void 0;
-  let acc_iir_coef = void 0;
-  let acc_x_iir = void 0;
-  let acc_y_iir = void 0;
-  let acc_z_iir = void 0;
-  const disconnectPolarH10 = () => {
-    device.gatt?.disconnect();
-    if (content2.contains(polarSensorDiv)) {
-      content2.removeChild(polarSensorDiv);
-    }
-    if (ecg_chart !== void 0) {
-      ecg_chart.stop();
-    }
-    if (ecg_resize_observer !== void 0) {
-      ecg_resize_observer.disconnect();
-    }
-    if (ECGDiv !== void 0) {
-      visContainerDiv.removeChild(ECGDiv);
-    }
-    resetECG();
-    if (acc_chart !== void 0) {
-      acc_chart.stop();
-    }
-    if (acc_resize_observer !== void 0) {
-      acc_resize_observer.disconnect();
-    }
-    if (ACCDiv !== void 0) {
-      visContainerDiv.removeChild(ACCDiv);
-    }
-    resetACC();
-  };
-  disBtn.addEventListener("click", disconnectPolarH10);
-  const newECGCallback = (data) => {
-    if (ecg_ts !== void 0 && ecg_rms_ts !== void 0 && ecg_hp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && ecg_rms_iir !== void 0) {
-      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / data.samples.length;
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
-        const data_i = data.samples[s_i];
-        const data_i_timeout_ms = s_i * estimated_sample_interval;
-        tsUpdate(ecg_ts, data_i, timestamp, data_i_timeout_ms);
-        const filtered_data_i = ecg_rms_iir.singleStep(data_i);
-        tsUpdate(ecg_hp_ts, filtered_data_i, timestamp, data_i_timeout_ms);
-        if (ecg_rms_win !== void 0) {
-          if (ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
-            ecg_rms_win[ecg_rms_win_i] = filtered_data_i;
-            ecg_rms_win_i++;
-          } else {
-            ecg_rms_win.set(ecg_rms_win.subarray(1));
-            ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
-            const data_rms_i = rms(ecg_rms_win);
-            tsUpdate(ecg_rms_ts, data_rms_i, timestamp, data_i_timeout_ms);
-          }
-        }
-      }
-    }
-  };
-  const newACCCallback = (data) => {
-    if (acc_x_ts !== void 0 && acc_y_ts !== void 0 && acc_z_ts !== void 0 && acc_x_lp_ts !== void 0 && acc_y_lp_ts !== void 0 && acc_z_lp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && acc_x_iir !== void 0 && acc_y_iir !== void 0 && acc_z_iir !== void 0 && acc_rho_ts !== void 0 && acc_phi_ts !== void 0 && acc_theta_ts !== void 0) {
-      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / (data.samples.length / 3);
-      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
-        const frameNum = Math.floor(s_i / 3);
-        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (frameNum + 1);
-        const data_i_timeout_ms = frameNum * estimated_sample_interval;
-        const y_d = -data.samples[s_i];
-        const x_d = -data.samples[s_i + 1];
-        const z_d = data.samples[s_i + 2];
-        tsUpdate(acc_x_ts, x_d, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_y_ts, y_d, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_z_ts, z_d, timestamp, data_i_timeout_ms);
-        const x_lp_d = acc_x_iir.singleStep(x_d);
-        const y_lp_d = acc_y_iir.singleStep(y_d);
-        const z_lp_d = acc_z_iir.singleStep(z_d);
-        tsUpdate(acc_x_lp_ts, x_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_y_lp_ts, y_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_z_lp_ts, z_lp_d, timestamp, data_i_timeout_ms);
-        const rho = Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
-        const phi = Math.atan(y_lp_d / Math.sqrt(x_lp_d * x_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
-        const theta = Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) / Math.PI * 180;
-        tsUpdate(acc_rho_ts, rho, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_phi_ts, phi, timestamp, data_i_timeout_ms);
-        tsUpdate(acc_theta_ts, theta, timestamp, data_i_timeout_ms);
-      }
-    }
-  };
-  const onToggleECG = async (ev) => {
-    if (ACC_switch_input) {
-      ACC_switch_input.disabled = true;
-    }
+  async initDeviceGraphCtrl() {
+    this.EXGCtrlDiv = createDiv("EXGCtrlDiv", this.dataCtrl, ["half-width"]);
+    const EXG_switch = createSwitch("EXG", this.onToggleECG.bind(this));
+    this.EXGCtrlDiv.appendChild(EXG_switch);
+    this.EXGSwitchInput = EXG_switch.children.item(0);
+    this.EXGDropDown = createDiv("EXGDropDownDiv", this.EXGCtrlDiv, [
+      "form-group"
+    ]);
+    this.EXGFormSelect = createSelect(
+      "EXGFormSelect",
+      this.EXGDropDown,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      ["Raw", "Highpass", "RMS"]
+    );
+    this.EXGFormSelect.selectedIndex = 0;
+    this.EXGFormSelect.onchange = this.changeEXGGraph.bind(this);
+    this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
+    const ACC_switch = createSwitch("ACC", this.onToggleACC.bind(this));
+    this.ACCCtrlDiv.appendChild(ACC_switch);
+    this.ACCSwitchInput = ACC_switch.children.item(0);
+    this.ACCDropDown = createDiv("ACCDropDownDiv", this.ACCCtrlDiv, [
+      "form-group"
+    ]);
+    this.ACCFormSelect = createSelect(
+      "ACCFormSelect",
+      this.ACCDropDown,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      ["Raw", "Lowpass", "Tilt"]
+    );
+    this.ACCFormSelect.selectedIndex = 0;
+    this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
+  }
+  async onToggleECG(ev) {
+    this.ACCSwitchInput.disabled = true;
     if (ev.target?.checked) {
-      ECGDiv = document.createElement("div");
-      ECGDiv.id = `ECGDiv-${polarRowID}`;
-      ECGDiv.addEventListener("wheel", onWheelECG);
       let width_class;
-      if (ACCDiv === void 0) {
+      if (this.ACCDiv === void 0) {
         width_class = "full-width";
       } else {
         width_class = "half-width";
-        ACCDiv.classList.remove("full-width");
-        ACCDiv.classList.add("half-width");
-        visContainerDiv.removeChild(ACCDiv);
+        this.ACCDiv.classList.remove("full-width");
+        this.ACCDiv.classList.add("half-width");
+        this.visContainerDiv.removeChild(this.ACCDiv);
       }
-      ECGDiv.classList.add("float-left", "almost-full-height", width_class);
-      visContainerDiv.appendChild(ECGDiv);
-      if (ACCDiv !== void 0) {
-        visContainerDiv.appendChild(ACCDiv);
+      this.ECGDiv = createDiv("ECGDiv", this.visContainerDiv, [
+        "float-left",
+        "almost-full-height",
+        width_class
+      ]);
+      this.ECGDiv.addEventListener("wheel", this.onWheelECG.bind(this));
+      if (this.ACCDiv !== void 0) {
+        this.visContainerDiv.appendChild(this.ACCDiv);
       }
-      ecg_canvas = document.createElement("canvas");
-      ecg_canvas.id = `ecg_canvas-${polarRowID}`;
-      ECGDiv.appendChild(ecg_canvas);
-      ecg_chart = new CustomSmoothie(DEFAULT_EXG_LINE_CHART_OPTION);
-      ecg_ts = new import_smoothie2.TimeSeries();
-      ecg_chart.addTimeSeries(ecg_ts, EXG_PRESENTATION_OPTIONS);
-      ecg_chart.streamTo(ecg_canvas, EXG_STREAM_DELAY_MS);
-      ecg_rms_ts = new import_smoothie2.TimeSeries();
-      ecg_hp_ts = new import_smoothie2.TimeSeries();
-      ecg_chart.addPostRenderCallback(exg_legend);
-      ecg_rms_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
-      ecg_rms_win_i = 0;
-      ecg_resize = resizeSmoothieGen(ecg_chart, 1, 1);
-      ecg_resize_observer = new ResizeObserver((entries) => {
+      this.ecg_canvas = createCanvas("ecg_canvas", this.ECGDiv);
+      this.ecg_chart = new CustomSmoothie(DEFAULT_EXG_LINE_CHART_OPTION);
+      this.ecg_ts = new import_smoothie2.TimeSeries();
+      this.ecg_chart.addTimeSeries(this.ecg_ts, EXG_PRESENTATION_OPTIONS);
+      this.ecg_chart.streamTo(this.ecg_canvas, EXG_STREAM_DELAY_MS);
+      this.ecg_rms_ts = new import_smoothie2.TimeSeries();
+      this.ecg_hp_ts = new import_smoothie2.TimeSeries();
+      this.ecg_chart.addPostRenderCallback(exg_legend);
+      this.ecg_rms_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
+      this.ecg_rms_win_i = 0;
+      this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
+      this.ecg_resize_observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
-          if (entry.target === ECGDiv && ecg_resize !== void 0) {
-            ecg_resize();
+          if (entry.target === this.ECGDiv && this.ecg_resize !== void 0) {
+            this.ecg_resize();
           }
         }
       });
-      ecg_resize_observer.observe(ECGDiv);
-      ecg_rms_iir_coef = IIRCalc.highpass({
+      this.ecg_resize_observer.observe(this.ECGDiv);
+      this.ecg_rms_iir_coef = IIRCalc.highpass({
         order: EXG_RMS_HIGHPASS_ORDER,
         characteristic: "butterworth",
         Fs: EXG_SAMPLE_RATE_HZ,
         Fc: EXG_RMS_HIGHPASS_CUTOFF_HZ,
         preGain: false
       });
-      ecg_rms_iir = (0, import_fili.IirFilter)(ecg_rms_iir_coef);
-      ecg_resize();
-      if (EXGFormSelect !== void 0) {
-        EXGFormSelect.disabled = false;
-        EXGFormSelect.selectedIndex = 0;
+      this.ecg_rms_iir = (0, import_fili.IirFilter)(this.ecg_rms_iir_coef);
+      this.ecg_resize();
+      if (this.EXGFormSelect !== void 0) {
+        this.EXGFormSelect.disabled = false;
+        this.EXGFormSelect.selectedIndex = 0;
       }
-      polarH10.addEventListener("ECG", newECGCallback);
+      this.polarH10.addEventListener("ECG", this.newECGCallback);
       try {
-        const startECGReply = await polarH10.startECG(EXG_SAMPLE_RATE_HZ);
+        const startECGReply = await this.polarH10.startECG(EXG_SAMPLE_RATE_HZ);
         if (startECGReply) {
           console.log(startECGReply);
         }
       } catch (e) {
         console.log(e);
-        disconnectPolarH10();
+        this.disconnectPolarH10();
       }
     } else {
-      if (ECGDiv !== void 0 && ecg_canvas !== void 0 && ecg_chart !== void 0) {
-        ecg_chart.stop();
-        if (EXGFormSelect !== void 0) {
-          EXGFormSelect.disabled = true;
-          EXGFormSelect.selectedIndex = 0;
+      if (this.ECGDiv !== void 0 && this.ecg_canvas !== void 0 && this.ecg_chart !== void 0) {
+        this.ecg_chart.stop();
+        if (this.EXGFormSelect !== void 0) {
+          this.EXGFormSelect.disabled = true;
+          this.EXGFormSelect.selectedIndex = 0;
         }
-        if (ECGDiv.contains(ecg_canvas)) {
-          ACCDiv?.classList.remove("half-width");
-          ACCDiv?.classList.add("full-width");
-          const stopECGReply = await polarH10.stopECG();
+        if (this.ECGDiv.contains(this.ecg_canvas)) {
+          this.ACCDiv?.classList.remove("half-width");
+          this.ACCDiv?.classList.add("full-width");
+          const stopECGReply = await this.polarH10.stopECG();
           if (stopECGReply) {
             console.log(stopECGReply);
           }
-          visContainerDiv.removeChild(ECGDiv);
-          ecg_resize_observer?.disconnect();
-          polarH10.removeEventListener("ECG", newECGCallback);
-          resetECG();
+          this.visContainerDiv.removeChild(this.ECGDiv);
+          this.ecg_resize_observer?.disconnect();
+          this.polarH10.removeEventListener("ECG", this.newECGCallback);
+          this.resetECG();
         }
       }
     }
-    if (ACC_switch_input) {
-      ACC_switch_input.disabled = false;
+    if (this.ACCSwitchInput) {
+      this.ACCSwitchInput.disabled = false;
     }
-  };
-  function resetECG() {
-    ecg_canvas = void 0;
-    ECGDiv = void 0;
-    ecg_resize = void 0;
-    ecg_rms_win = void 0;
-    ecg_chart = void 0;
-    ecg_ts = void 0;
-    ecg_hp_ts = void 0;
-    ecg_rms_ts = void 0;
-    ecg_resize_observer = void 0;
-    ecg_rms_iir_coef = void 0;
-    ecg_rms_iir = void 0;
-    ecg_rms_win_i = 0;
   }
-  const onToggleACC = async (ev) => {
-    if (EXG_switch_input) {
-      EXG_switch_input.disabled = true;
+  async onToggleACC(ev) {
+    if (this.EXGSwitchInput) {
+      this.EXGSwitchInput.disabled = true;
     }
     if (ev.target?.checked) {
-      ACCDiv = document.createElement("div");
-      ACCDiv.id = `ACCDiv-${polarRowID}`;
-      ACCDiv.addEventListener("wheel", onWheelACC);
       let width_class;
-      if (ECGDiv === void 0) {
+      if (this.ECGDiv === void 0) {
         width_class = "full-width";
       } else {
         width_class = "half-width";
-        ECGDiv.classList.remove("full-width");
-        ECGDiv.classList.add("half-width");
+        this.ECGDiv.classList.remove("full-width");
+        this.ECGDiv.classList.add("half-width");
       }
-      ACCDiv.classList.add("float-left", "almost-full-height", width_class);
-      visContainerDiv.appendChild(ACCDiv);
-      acc_canvas = document.createElement("canvas");
-      acc_canvas.id = `acc_canvas-${polarRowID}`;
-      ACCDiv.appendChild(acc_canvas);
-      acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
-      acc_x_ts = new import_smoothie2.TimeSeries();
-      acc_y_ts = new import_smoothie2.TimeSeries();
-      acc_z_ts = new import_smoothie2.TimeSeries();
-      acc_chart.addTimeSeries(acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
-      acc_chart.addTimeSeries(acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
-      acc_chart.addTimeSeries(acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
-      acc_chart.streamTo(acc_canvas, ACC_STREAM_DELAY_MS);
-      acc_chart.addPostRenderCallback(acc_legend);
-      acc_chart.addPostRenderCallback(scroll_legend);
+      this.ACCDiv = createDiv("ACCDiv", this.visContainerDiv, [
+        "float-left",
+        "almost-full-height",
+        width_class
+      ]);
+      this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
+      this.acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
+      this.acc_x_ts = new import_smoothie2.TimeSeries();
+      this.acc_y_ts = new import_smoothie2.TimeSeries();
+      this.acc_z_ts = new import_smoothie2.TimeSeries();
+      this.acc_chart.addTimeSeries(this.acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.addTimeSeries(this.acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.addTimeSeries(this.acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.streamTo(this.acc_canvas, ACC_STREAM_DELAY_MS);
+      this.acc_chart.addPostRenderCallback(acc_legend);
+      this.acc_chart.addPostRenderCallback(scroll_legend);
       setTimeout(() => {
-        if (acc_chart) {
-          acc_chart.removePostRenderCallback(scroll_legend);
+        if (this.acc_chart) {
+          this.acc_chart.removePostRenderCallback(scroll_legend);
         }
       }, SCROLL_LEGENT_DISP_TIME_MS);
-      acc_x_lp_ts = new import_smoothie2.TimeSeries();
-      acc_y_lp_ts = new import_smoothie2.TimeSeries();
-      acc_z_lp_ts = new import_smoothie2.TimeSeries();
-      acc_rho_ts = new import_smoothie2.TimeSeries();
-      acc_phi_ts = new import_smoothie2.TimeSeries();
-      acc_theta_ts = new import_smoothie2.TimeSeries();
-      acc_resize = resizeSmoothieGen(acc_chart, 1, 1);
-      acc_resize_observer = new ResizeObserver((entries) => {
+      this.acc_x_lp_ts = new import_smoothie2.TimeSeries();
+      this.acc_y_lp_ts = new import_smoothie2.TimeSeries();
+      this.acc_z_lp_ts = new import_smoothie2.TimeSeries();
+      this.acc_rho_ts = new import_smoothie2.TimeSeries();
+      this.acc_phi_ts = new import_smoothie2.TimeSeries();
+      this.acc_theta_ts = new import_smoothie2.TimeSeries();
+      this.acc_resize = resizeSmoothieGen(this.acc_chart, 1, 1);
+      this.acc_resize_observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
-          if (entry.target === ACCDiv && acc_resize !== void 0) {
-            acc_resize();
+          if (entry.target === this.ACCDiv && this.acc_resize !== void 0) {
+            this.acc_resize();
           }
         }
       });
-      acc_resize_observer.observe(ACCDiv);
-      acc_iir_coef = IIRCalc.lowpass({
+      this.acc_resize_observer.observe(this.ACCDiv);
+      this.acc_iir_coef = IIRCalc.lowpass({
         order: AAC_LOWPASS_ORDER,
         characteristic: "butterworth",
         Fs: ACC_SAMPLE_RATE_HZ,
         Fc: AAC_LOWPASS_CUTOFF_HZ,
         preGain: false
       });
-      acc_x_iir = (0, import_fili.IirFilter)(acc_iir_coef);
-      acc_y_iir = (0, import_fili.IirFilter)(acc_iir_coef);
-      acc_z_iir = (0, import_fili.IirFilter)(acc_iir_coef);
-      acc_resize();
-      if (ACCFormSelect !== void 0) {
-        ACCFormSelect.disabled = false;
-        ACCFormSelect.selectedIndex = 0;
+      this.acc_x_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
+      this.acc_y_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
+      this.acc_z_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
+      this.acc_resize();
+      if (this.ACCFormSelect !== void 0) {
+        this.ACCFormSelect.disabled = false;
+        this.ACCFormSelect.selectedIndex = 0;
       }
-      polarH10.addEventListener("ACC", newACCCallback);
+      this.polarH10.addEventListener("ACC", this.newACCCallback);
       try {
-        const startACCReply = await polarH10.startACC(
+        const startACCReply = await this.polarH10.startACC(
           ACC_RANGE_G,
           ACC_SAMPLE_RATE_HZ
         );
@@ -2280,91 +2330,314 @@ async function createPolarVisRow(content2, device) {
         }
       } catch (e) {
         console.log(e);
-        disconnectPolarH10();
+        this.disconnectPolarH10();
       }
     } else {
-      if (ACCDiv !== void 0 && acc_canvas !== void 0 && acc_chart !== void 0) {
-        acc_chart.stop();
-        if (ACCFormSelect !== void 0) {
-          ACCFormSelect.disabled = true;
-          ACCFormSelect.selectedIndex = 0;
+      if (this.ACCDiv !== void 0 && this.acc_canvas !== void 0 && this.acc_chart !== void 0) {
+        this.acc_chart.stop();
+        if (this.ACCFormSelect !== void 0) {
+          this.ACCFormSelect.disabled = true;
+          this.ACCFormSelect.selectedIndex = 0;
         }
-        if (ACCDiv.contains(acc_canvas)) {
-          ACCDiv.removeChild(acc_canvas);
+        if (this.ACCDiv.contains(this.acc_canvas)) {
+          this.ACCDiv.removeChild(this.acc_canvas);
         }
-        ECGDiv?.classList.remove("half-width");
-        ECGDiv?.classList.add("full-width");
-        polarH10.removeEventListener("ACC", newACCCallback);
-        visContainerDiv.removeChild(ACCDiv);
-        acc_resize_observer?.disconnect();
-        const stopACCReply = await polarH10.stopACC();
+        this.ECGDiv?.classList.remove("half-width");
+        this.ECGDiv?.classList.add("full-width");
+        this.polarH10.removeEventListener("ACC", this.newACCCallback);
+        this.visContainerDiv.removeChild(this.ACCDiv);
+        this.acc_resize_observer?.disconnect();
+        const stopACCReply = await this.polarH10.stopACC();
         if (stopACCReply) {
           console.log(stopACCReply);
         }
-        resetACC();
+        this.resetACC();
       }
     }
-    if (EXG_switch_input) {
-      EXG_switch_input.disabled = false;
+    if (this.EXGSwitchInput) {
+      this.EXGSwitchInput.disabled = false;
     }
-  };
-  function resetACC() {
-    ACCDiv = void 0;
-    acc_resize = void 0;
-    acc_canvas = void 0;
-    acc_chart = void 0;
-    acc_x_ts = void 0;
-    acc_y_ts = void 0;
-    acc_z_ts = void 0;
-    acc_resize_observer = void 0;
-    acc_iir_coef = void 0;
-    acc_x_iir = void 0;
-    acc_y_iir = void 0;
-    acc_z_iir = void 0;
-    acc_x_lp_ts = void 0;
-    acc_y_lp_ts = void 0;
-    acc_z_lp_ts = void 0;
-    acc_rho_ts = void 0;
-    acc_phi_ts = void 0;
-    acc_theta_ts = void 0;
   }
-  const onWheelECG = (ev) => {
-    if (ecg_chart !== void 0) {
+  changeEXGGraph(evt) {
+    if (this.ecg_canvas !== void 0 && this.ecg_chart !== void 0 && this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0) {
+      const selected = evt.target.selectedIndex;
+      this.ecg_chart.stop();
+      switch (selected) {
+        case 0:
+          this.ecg_chart.removeTimeSeries(this.ecg_rms_ts);
+          this.ecg_chart.removeTimeSeries(this.ecg_hp_ts);
+          this.ecg_chart.addTimeSeries(this.ecg_ts, EXG_PRESENTATION_OPTIONS);
+          this.ecg_chart.options.minValue = void 0;
+          this.ecg_chart.options.maxValue = void 0;
+          this.ecg_chart.updateValueRange();
+          if (this.ecg_chart.options.title) {
+            this.ecg_chart.options.title.text = DEFAULT_EXG_LINE_CHART_OPTION.title?.text;
+          }
+          if (this.ecg_chart.removePostRenderCallback(exg_rms_legend).length || this.ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
+            this.ecg_chart.addPostRenderCallback(exg_legend);
+          }
+          break;
+        case 1:
+          this.ecg_chart.removeTimeSeries(this.ecg_ts);
+          this.ecg_chart.removeTimeSeries(this.ecg_rms_ts);
+          this.ecg_chart.addTimeSeries(
+            this.ecg_hp_ts,
+            EXG_HP_PRESENTATION_OPTIONS
+          );
+          this.ecg_chart.options.minValue = this.EXG_HP_MIN;
+          this.ecg_chart.options.maxValue = this.EXG_HP_MAX;
+          this.ecg_chart.updateValueRange();
+          if (this.ecg_chart.options.title) {
+            this.ecg_chart.options.title.text = `Highpass (${EXG_RMS_HIGHPASS_CUTOFF_HZ}Hz ${EXG_RMS_HIGHPASS_ORDER}th order Butterworth) on ECG/EMG raw`;
+          }
+          if (this.ecg_chart.removePostRenderCallback(exg_legend).length || this.ecg_chart.removePostRenderCallback(exg_rms_legend).length) {
+            this.ecg_chart.addPostRenderCallback(exg_hp_legend);
+            this.ecg_chart.addPostRenderCallback(scroll_legend);
+            setTimeout(() => {
+              if (this.ecg_chart) {
+                this.ecg_chart.removePostRenderCallback(scroll_legend);
+              }
+            }, SCROLL_LEGENT_DISP_TIME_MS);
+          }
+          break;
+        case 2:
+          this.ecg_chart.removeTimeSeries(this.ecg_ts);
+          this.ecg_chart.removeTimeSeries(this.ecg_hp_ts);
+          this.ecg_chart.addTimeSeries(
+            this.ecg_rms_ts,
+            EXG_RMS_PRESENTATION_OPTIONS
+          );
+          this.ecg_chart.options.minValue = this.EXG_RMS_MIN;
+          this.ecg_chart.options.maxValue = this.EXG_RMS_MAX;
+          this.ecg_chart.updateValueRange();
+          if (this.ecg_chart.options.title) {
+            this.ecg_chart.options.title.text = `RMS (Highpass on ECG/EMG raw)`;
+          }
+          if (this.ecg_chart.removePostRenderCallback(exg_legend).length || this.ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
+            this.ecg_chart.addPostRenderCallback(exg_rms_legend);
+            this.ecg_chart.addPostRenderCallback(scroll_legend);
+            setTimeout(() => {
+              if (this.ecg_chart) {
+                this.ecg_chart.removePostRenderCallback(scroll_legend);
+              }
+            }, SCROLL_LEGENT_DISP_TIME_MS);
+          }
+          break;
+      }
+      this.ecg_chart.start();
+    }
+  }
+  changeACCGraph(evt) {
+    if (this.acc_canvas !== void 0 && this.acc_chart !== void 0 && this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0) {
+      const selected = evt.target.selectedIndex;
+      this.acc_chart.stop();
+      switch (selected) {
+        case 0:
+          this.acc_chart.removeTimeSeries(this.acc_x_lp_ts);
+          this.acc_chart.removeTimeSeries(this.acc_y_lp_ts);
+          this.acc_chart.removeTimeSeries(this.acc_z_lp_ts);
+          this.acc_chart.removeTimeSeries(this.acc_rho_ts);
+          this.acc_chart.removeTimeSeries(this.acc_phi_ts);
+          this.acc_chart.removeTimeSeries(this.acc_theta_ts);
+          this.acc_chart.addTimeSeries(
+            this.acc_x_ts,
+            X_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_y_ts,
+            Y_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_z_ts,
+            Z_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.options.minValue = this.ACC_MIN;
+          this.acc_chart.options.maxValue = this.ACC_MAX;
+          this.acc_chart.updateValueRange();
+          if (this.acc_chart.options.title) {
+            this.acc_chart.options.title.text = DEFAULT_ACC_LINE_CHART_OPTION.title?.text;
+          }
+          if (this.acc_chart.options.labels) {
+            this.acc_chart.options.labels.disabled = false;
+          }
+          this.acc_chart.options.horizontalLines = [];
+          if (this.acc_chart.removePostRenderCallback(acc_lp_legend).length || this.acc_chart.removePostRenderCallback(tilt_legend).length) {
+            this.acc_chart.addPostRenderCallback(acc_legend);
+            this.acc_chart.addPostRenderCallback(scroll_legend);
+            setTimeout(() => {
+              if (this.acc_chart) {
+                this.acc_chart.removePostRenderCallback(scroll_legend);
+              }
+            }, SCROLL_LEGENT_DISP_TIME_MS);
+          }
+          break;
+        case 1:
+          this.acc_chart.removeTimeSeries(this.acc_x_ts);
+          this.acc_chart.removeTimeSeries(this.acc_y_ts);
+          this.acc_chart.removeTimeSeries(this.acc_z_ts);
+          this.acc_chart.removeTimeSeries(this.acc_rho_ts);
+          this.acc_chart.removeTimeSeries(this.acc_phi_ts);
+          this.acc_chart.removeTimeSeries(this.acc_theta_ts);
+          this.acc_chart.addTimeSeries(
+            this.acc_x_lp_ts,
+            X_LP_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_y_lp_ts,
+            Y_LP_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_z_lp_ts,
+            Z_LP_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.options.minValue = this.ACC_MIN;
+          this.acc_chart.options.maxValue = this.ACC_MAX;
+          this.acc_chart.updateValueRange();
+          if (this.acc_chart.options.title) {
+            this.acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
+          }
+          if (this.acc_chart.options.labels) {
+            this.acc_chart.options.labels.disabled = false;
+          }
+          this.acc_chart.options.horizontalLines = [];
+          if (this.acc_chart.removePostRenderCallback(acc_legend).length || this.acc_chart.removePostRenderCallback(tilt_legend).length) {
+            this.acc_chart.addPostRenderCallback(acc_lp_legend);
+            this.acc_chart?.addPostRenderCallback(scroll_legend);
+            setTimeout(() => {
+              if (this.acc_chart) {
+                this.acc_chart.removePostRenderCallback(scroll_legend);
+              }
+            }, SCROLL_LEGENT_DISP_TIME_MS);
+          }
+          break;
+        case 2:
+          this.acc_chart.removeTimeSeries(this.acc_x_ts);
+          this.acc_chart.removeTimeSeries(this.acc_y_ts);
+          this.acc_chart.removeTimeSeries(this.acc_z_ts);
+          this.acc_chart.removeTimeSeries(this.acc_x_lp_ts);
+          this.acc_chart.removeTimeSeries(this.acc_y_lp_ts);
+          this.acc_chart.removeTimeSeries(this.acc_z_lp_ts);
+          this.acc_chart.addTimeSeries(
+            this.acc_rho_ts,
+            RHO_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_phi_ts,
+            PHI_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.addTimeSeries(
+            this.acc_theta_ts,
+            THETA_AXIS_PRESENTATION_OPTIONS
+          );
+          this.acc_chart.options.minValue = -140;
+          this.acc_chart.options.maxValue = 140;
+          if (this.acc_chart.options.title) {
+            this.acc_chart.options.title.text = `Tilt angle [-90\xB0, 90\xB0] from lowpass on accelerometer raw`;
+          }
+          if (this.acc_chart.options.labels) {
+            this.acc_chart.options.labels.disabled = true;
+          }
+          this.acc_chart.options.horizontalLines = [
+            { value: 90, color: "#ffffff7f", lineWidth: 1 },
+            { value: -90, color: "#ffffff7f", lineWidth: 1 }
+          ];
+          if (this.acc_chart.removePostRenderCallback(acc_legend).length || this.acc_chart.removePostRenderCallback(acc_lp_legend).length) {
+            this.acc_chart.addPostRenderCallback(tilt_legend);
+          }
+          break;
+      }
+      this.acc_chart.start();
+    }
+  }
+  _newECGCallback(data) {
+    if (this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.ecg_rms_iir !== void 0) {
+      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / data.samples.length;
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
+        const data_i = data.samples[s_i];
+        const data_i_timeout_ms = s_i * estimated_sample_interval;
+        tsUpdate(this.ecg_ts, data_i, timestamp, data_i_timeout_ms);
+        const filtered_data_i = this.ecg_rms_iir.singleStep(data_i);
+        tsUpdate(this.ecg_hp_ts, filtered_data_i, timestamp, data_i_timeout_ms);
+        if (this.ecg_rms_win !== void 0) {
+          if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
+            this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
+            this.ecg_rms_win_i++;
+          } else {
+            this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
+            this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
+            const data_rms_i = rms(this.ecg_rms_win);
+            tsUpdate(this.ecg_rms_ts, data_rms_i, timestamp, data_i_timeout_ms);
+          }
+        }
+      }
+    }
+  }
+  _newACCCallback(data) {
+    if (this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.acc_x_iir !== void 0 && this.acc_y_iir !== void 0 && this.acc_z_iir !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0) {
+      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / (data.samples.length / 3);
+      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
+        const frameNum = Math.floor(s_i / 3);
+        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (frameNum + 1);
+        const data_i_timeout_ms = frameNum * estimated_sample_interval;
+        const y_d = -data.samples[s_i];
+        const x_d = -data.samples[s_i + 1];
+        const z_d = data.samples[s_i + 2];
+        tsUpdate(this.acc_x_ts, x_d, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_y_ts, y_d, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_z_ts, z_d, timestamp, data_i_timeout_ms);
+        const x_lp_d = this.acc_x_iir.singleStep(x_d);
+        const y_lp_d = this.acc_y_iir.singleStep(y_d);
+        const z_lp_d = this.acc_z_iir.singleStep(z_d);
+        tsUpdate(this.acc_x_lp_ts, x_lp_d, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_y_lp_ts, y_lp_d, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_z_lp_ts, z_lp_d, timestamp, data_i_timeout_ms);
+        const rho = Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
+        const phi = Math.atan(y_lp_d / Math.sqrt(x_lp_d * x_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
+        const theta = Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) / Math.PI * 180;
+        tsUpdate(this.acc_rho_ts, rho, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_phi_ts, phi, timestamp, data_i_timeout_ms);
+        tsUpdate(this.acc_theta_ts, theta, timestamp, data_i_timeout_ms);
+      }
+    }
+  }
+  onWheelECG(ev) {
+    if (this.ecg_chart !== void 0) {
       let delta = 0;
       if (ev.deltaY < 0) {
         delta = 1;
       } else if (ev.deltaY > 0) {
         delta = -1;
       }
-      switch (EXGFormSelect?.selectedIndex) {
+      switch (this.EXGFormSelect?.selectedIndex) {
         case 0:
           break;
         case 1:
           ev.preventDefault();
-          LOCAL_EXG_HP_MAX += delta;
-          LOCAL_EXG_HP_MIN -= delta;
-          if (LOCAL_EXG_HP_MAX < 5 || LOCAL_EXG_HP_MAX <= LOCAL_EXG_HP_MIN || LOCAL_EXG_HP_MAX / 2 > EXG_HP_MAX) {
-            LOCAL_EXG_HP_MAX -= delta;
-            LOCAL_EXG_HP_MIN += delta;
+          this.EXG_HP_MAX += delta;
+          this.EXG_HP_MIN -= delta;
+          if (this.EXG_HP_MAX < 5 || this.EXG_HP_MAX <= this.EXG_HP_MIN || this.EXG_HP_MAX / 2 > EXG_HP_MAX) {
+            this.EXG_HP_MAX -= delta;
+            this.EXG_HP_MIN += delta;
           }
-          ecg_chart.options.minValue = LOCAL_EXG_HP_MIN;
-          ecg_chart.options.maxValue = LOCAL_EXG_HP_MAX;
+          this.ecg_chart.options.minValue = this.EXG_HP_MIN;
+          this.ecg_chart.options.maxValue = this.EXG_HP_MAX;
           break;
         case 2:
           ev.preventDefault();
-          LOCAL_EXG_RMS_MAX += delta;
-          if (LOCAL_EXG_RMS_MAX < 5 || LOCAL_EXG_RMS_MAX <= LOCAL_EXG_RMS_MIN || LOCAL_EXG_RMS_MAX / 2 > EXG_RMS_MAX) {
-            LOCAL_EXG_RMS_MAX -= delta;
+          this.EXG_RMS_MAX += delta;
+          if (this.EXG_RMS_MAX < 5 || this.EXG_RMS_MAX <= this.EXG_RMS_MIN || this.EXG_RMS_MAX / 2 > EXG_RMS_MAX) {
+            this.EXG_RMS_MAX -= delta;
           }
-          ecg_chart.options.maxValue = LOCAL_EXG_RMS_MAX;
+          this.ecg_chart.options.maxValue = this.EXG_RMS_MAX;
           break;
       }
     }
-  };
-  const onWheelACC = (ev) => {
-    if (acc_chart !== void 0) {
+  }
+  onWheelACC(ev) {
+    if (this.acc_chart !== void 0) {
       let delta = 0;
-      switch (ACCFormSelect?.selectedIndex) {
+      switch (this.ACCFormSelect?.selectedIndex) {
         case 0:
         case 1:
           ev.preventDefault();
@@ -2373,228 +2646,22 @@ async function createPolarVisRow(content2, device) {
           } else if (ev.deltaY > 0) {
             delta = -10;
           }
-          LOCAL_ACC_MAX += delta;
-          LOCAL_ACC_MIN -= delta;
-          if (LOCAL_ACC_MAX < 100 || LOCAL_ACC_MAX <= LOCAL_ACC_MIN || LOCAL_ACC_MAX / 2 > ACC_MAX) {
-            LOCAL_ACC_MAX -= delta;
-            LOCAL_ACC_MIN += delta;
+          this.ACC_MAX += delta;
+          this.ACC_MIN -= delta;
+          if (this.ACC_MAX < 100 || this.ACC_MAX <= this.ACC_MIN || this.ACC_MAX / 2 > ACC_MAX) {
+            this.ACC_MAX -= delta;
+            this.ACC_MIN += delta;
           }
-          acc_chart.options.minValue = LOCAL_ACC_MIN;
-          acc_chart.options.maxValue = LOCAL_ACC_MAX;
+          this.acc_chart.options.minValue = this.ACC_MIN;
+          this.acc_chart.options.maxValue = this.ACC_MAX;
           break;
         case 2:
           break;
       }
     }
-  };
-  const EXGCtrlDiv = document.createElement("div");
-  EXGCtrlDiv.id = `EXGCtrlDiv-${polarRowID}`;
-  dataCtrl.append(EXGCtrlDiv);
-  const EXG_switch = createSwitch("EXG", onToggleECG);
-  EXGCtrlDiv.classList.add("half-width");
-  EXGCtrlDiv.appendChild(EXG_switch);
-  const EXG_switch_input = EXG_switch.children.item(0);
-  const EXGDropDown = document.createElement("div");
-  EXGDropDown.classList.add("form-group");
-  EXGCtrlDiv.appendChild(EXGDropDown);
-  EXGFormSelect = document.createElement("select");
-  EXGFormSelect.disabled = true;
-  EXGFormSelect.id = `EXGDispOptions-${polarRowID}`;
-  EXGFormSelect.classList.add(
-    "form-select",
-    "dark-select",
-    "select-sm",
-    "almost-full-width"
-  );
-  EXGDropDown.appendChild(EXGFormSelect);
-  addOptionsToSelect(EXGFormSelect, ["Raw", "Highpass", "RMS"]);
-  EXGFormSelect.selectedIndex = 0;
-  EXGFormSelect.onchange = (evt) => {
-    if (ecg_canvas !== void 0 && ecg_chart !== void 0 && ecg_ts !== void 0 && ecg_rms_ts !== void 0 && ecg_hp_ts !== void 0) {
-      const selected = evt.target.selectedIndex;
-      ecg_chart.stop();
-      switch (selected) {
-        case 0:
-          ecg_chart.removeTimeSeries(ecg_rms_ts);
-          ecg_chart.removeTimeSeries(ecg_hp_ts);
-          ecg_chart.addTimeSeries(ecg_ts, EXG_PRESENTATION_OPTIONS);
-          ecg_chart.options.minValue = void 0;
-          ecg_chart.options.maxValue = void 0;
-          ecg_chart.updateValueRange();
-          if (ecg_chart.options.title) {
-            ecg_chart.options.title.text = DEFAULT_EXG_LINE_CHART_OPTION.title?.text;
-          }
-          if (ecg_chart.removePostRenderCallback(exg_rms_legend).length || ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
-            ecg_chart.addPostRenderCallback(exg_legend);
-          }
-          break;
-        case 1:
-          ecg_chart.removeTimeSeries(ecg_ts);
-          ecg_chart.removeTimeSeries(ecg_rms_ts);
-          ecg_chart.addTimeSeries(ecg_hp_ts, EXG_HP_PRESENTATION_OPTIONS);
-          ecg_chart.options.minValue = LOCAL_EXG_HP_MIN;
-          ecg_chart.options.maxValue = LOCAL_EXG_HP_MAX;
-          ecg_chart.updateValueRange();
-          if (ecg_chart.options.title) {
-            ecg_chart.options.title.text = `Highpass (${EXG_RMS_HIGHPASS_CUTOFF_HZ}Hz ${EXG_RMS_HIGHPASS_ORDER}th order Butterworth) on ECG/EMG raw`;
-          }
-          if (ecg_chart.removePostRenderCallback(exg_legend).length || ecg_chart.removePostRenderCallback(exg_rms_legend).length) {
-            ecg_chart.addPostRenderCallback(exg_hp_legend);
-            ecg_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (ecg_chart) {
-                ecg_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
-          break;
-        case 2:
-          ecg_chart.removeTimeSeries(ecg_ts);
-          ecg_chart.removeTimeSeries(ecg_hp_ts);
-          ecg_chart.addTimeSeries(ecg_rms_ts, EXG_RMS_PRESENTATION_OPTIONS);
-          ecg_chart.options.minValue = LOCAL_EXG_RMS_MIN;
-          ecg_chart.options.maxValue = LOCAL_EXG_RMS_MAX;
-          ecg_chart.updateValueRange();
-          if (ecg_chart.options.title) {
-            ecg_chart.options.title.text = `RMS (Highpass on ECG/EMG raw)`;
-          }
-          if (ecg_chart.removePostRenderCallback(exg_legend).length || ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
-            ecg_chart.addPostRenderCallback(exg_rms_legend);
-            ecg_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (ecg_chart) {
-                ecg_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
-          break;
-      }
-      ecg_chart.start();
-    }
-  };
-  const ACCCtrlDiv = document.createElement("div");
-  ACCCtrlDiv.id = `ACCCtrlDiv-${polarRowID}`;
-  dataCtrl.append(ACCCtrlDiv);
-  const ACC_switch = createSwitch("ACC", onToggleACC);
-  ACCCtrlDiv.classList.add("half-width");
-  ACCCtrlDiv.appendChild(ACC_switch);
-  const ACC_switch_input = ACC_switch.children.item(0);
-  const ACCDropDown = document.createElement("div");
-  ACCDropDown.classList.add("form-group");
-  ACCCtrlDiv.appendChild(ACCDropDown);
-  ACCFormSelect = document.createElement("select");
-  ACCFormSelect.disabled = true;
-  ACCFormSelect.id = `ACCDispOptions-${polarRowID}`;
-  ACCFormSelect.classList.add(
-    "form-select",
-    "dark-select",
-    "select-sm",
-    "almost-full-width"
-  );
-  ACCDropDown.appendChild(ACCFormSelect);
-  addOptionsToSelect(ACCFormSelect, ["Raw", "Lowpass", "Tilt"]);
-  ACCFormSelect.selectedIndex = 0;
-  ACCFormSelect.onchange = (evt) => {
-    if (acc_canvas !== void 0 && acc_chart !== void 0 && acc_x_ts !== void 0 && acc_y_ts !== void 0 && acc_z_ts !== void 0 && acc_x_lp_ts !== void 0 && acc_y_lp_ts !== void 0 && acc_z_lp_ts !== void 0) {
-      const selected = evt.target.selectedIndex;
-      acc_chart.stop();
-      switch (selected) {
-        case 0:
-          acc_chart.removeTimeSeries(acc_x_lp_ts);
-          acc_chart.removeTimeSeries(acc_y_lp_ts);
-          acc_chart.removeTimeSeries(acc_z_lp_ts);
-          acc_chart.removeTimeSeries(acc_rho_ts);
-          acc_chart.removeTimeSeries(acc_phi_ts);
-          acc_chart.removeTimeSeries(acc_theta_ts);
-          acc_chart.addTimeSeries(acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.options.minValue = LOCAL_ACC_MIN;
-          acc_chart.options.maxValue = LOCAL_ACC_MAX;
-          acc_chart.updateValueRange();
-          if (acc_chart.options.title) {
-            acc_chart.options.title.text = DEFAULT_ACC_LINE_CHART_OPTION.title?.text;
-          }
-          if (acc_chart.options.labels) {
-            acc_chart.options.labels.disabled = false;
-          }
-          acc_chart.options.horizontalLines = [];
-          if (acc_chart.removePostRenderCallback(acc_lp_legend).length || acc_chart.removePostRenderCallback(tilt_legend).length) {
-            acc_chart.addPostRenderCallback(acc_legend);
-            acc_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (acc_chart) {
-                acc_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
-          break;
-        case 1:
-          acc_chart.removeTimeSeries(acc_x_ts);
-          acc_chart.removeTimeSeries(acc_y_ts);
-          acc_chart.removeTimeSeries(acc_z_ts);
-          acc_chart.removeTimeSeries(acc_rho_ts);
-          acc_chart.removeTimeSeries(acc_phi_ts);
-          acc_chart.removeTimeSeries(acc_theta_ts);
-          acc_chart.addTimeSeries(acc_x_lp_ts, X_LP_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(acc_y_lp_ts, Y_LP_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(acc_z_lp_ts, Z_LP_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.options.minValue = LOCAL_ACC_MIN;
-          acc_chart.options.maxValue = LOCAL_ACC_MAX;
-          acc_chart.updateValueRange();
-          if (acc_chart.options.title) {
-            acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
-          }
-          if (acc_chart.options.labels) {
-            acc_chart.options.labels.disabled = false;
-          }
-          acc_chart.options.horizontalLines = [];
-          if (acc_chart.removePostRenderCallback(acc_legend).length || acc_chart.removePostRenderCallback(tilt_legend).length) {
-            acc_chart.addPostRenderCallback(acc_lp_legend);
-            acc_chart?.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (acc_chart) {
-                acc_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
-          break;
-        case 2:
-          acc_chart.removeTimeSeries(acc_x_ts);
-          acc_chart.removeTimeSeries(acc_y_ts);
-          acc_chart.removeTimeSeries(acc_z_ts);
-          acc_chart.removeTimeSeries(acc_x_lp_ts);
-          acc_chart.removeTimeSeries(acc_y_lp_ts);
-          acc_chart.removeTimeSeries(acc_z_lp_ts);
-          acc_chart.addTimeSeries(acc_rho_ts, RHO_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(acc_phi_ts, PHI_AXIS_PRESENTATION_OPTIONS);
-          acc_chart.addTimeSeries(
-            acc_theta_ts,
-            THETA_AXIS_PRESENTATION_OPTIONS
-          );
-          acc_chart.options.minValue = -140;
-          acc_chart.options.maxValue = 140;
-          if (acc_chart.options.title) {
-            acc_chart.options.title.text = `Tilt angle [-90\xB0, 90\xB0] from lowpass on accelerometer raw`;
-          }
-          if (acc_chart.options.labels) {
-            acc_chart.options.labels.disabled = true;
-          }
-          acc_chart.options.horizontalLines = [
-            { value: 90, color: "#ffffff7f", lineWidth: 1 },
-            { value: -90, color: "#ffffff7f", lineWidth: 1 }
-          ];
-          if (acc_chart.removePostRenderCallback(acc_legend).length || acc_chart.removePostRenderCallback(acc_lp_legend).length) {
-            acc_chart.addPostRenderCallback(tilt_legend);
-          }
-          break;
-      }
-      acc_chart.start();
-    }
-  };
-  polarRowID++;
-}
-function resizeSmoothieGen(chart, widthRatio, heightRatio) {
+  }
+};
+function resizeSmoothieGen(chart, widthRatio, heightRatio, verbose = false) {
   const resize = () => {
     const canvas = chart.canvas;
     const parent = canvas.parentNode;
@@ -2604,18 +2671,20 @@ function resizeSmoothieGen(chart, widthRatio, heightRatio) {
     const new_height = height * heightRatio;
     canvas.width = new_width - 5;
     canvas.height = new_height;
-    console.log(
-      `Resize at ${(/* @__PURE__ */ new Date()).valueOf()} parent: ${parent.id} ${parent.offsetWidth} ${canvas.width} ${parent.offsetHeight} ${canvas.height}`
-    );
+    if (verbose) {
+      console.log(
+        `Resize at ${(/* @__PURE__ */ new Date()).valueOf()} parent: ${parent.id} ${parent.offsetWidth} ${canvas.width} ${parent.offsetHeight} ${canvas.height}`
+      );
+    }
   };
   return resize;
 }
-function createSwitch(labeltext, eventHandler) {
+function createSwitch(labeltext, eventHandler, idGenerator = getPolarRowId) {
   const label = document.createElement("label");
   label.setAttribute("class", "form-switch");
   label.classList.add("label-sm");
   const input = document.createElement("input");
-  input.id = `${labeltext}-onoff-${polarRowID}`;
+  input.id = `${labeltext}-onoff-${idGenerator()}`;
   input.type = "checkbox";
   input.addEventListener("change", eventHandler);
   input.classList.add("input-sm");
@@ -2710,15 +2779,15 @@ function tilt_legend(canvas, time) {
     ctx.save();
     ctx.textBaseline = "top";
     ctx.font = "14px Arial";
-    if (X_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (RHO_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = RHO_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 \u03C1\xB0 \u2220(X-axis, Horizon)", 10, 5);
-    if (Y_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (PHI_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = PHI_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 \u03D5\xB0 \u2220(Y-axis, Horizon)", 170, 5);
-    if (Z_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (THETA_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = THETA_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 \u03B8\xB0 \u2220(Z-axis, -Gravity)", 330, 5);
@@ -2731,15 +2800,15 @@ function acc_lp_legend(canvas, time) {
     ctx.save();
     ctx.textBaseline = "top";
     ctx.font = "14px Arial";
-    if (X_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (X_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = X_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 Lowpass X axis (mG)", 10, 5);
-    if (Y_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (Y_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = Y_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 Lowpass Y axis (mG)", 170, 5);
-    if (Z_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+    if (Z_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
       ctx.fillStyle = Z_LP_AXIS_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText("\u2015 Lowpass Z axis (mG)", 330, 5);
@@ -2759,14 +2828,53 @@ function tsUpdate(ts, val, timestamp_ms, delay_ms) {
     ts.append(timestamp_ms, val);
   }, delay_ms);
 }
-function addOptionsToSelect(select, options) {
+function createSelect(id, parent = void 0, classList = [], textContent = "", options = [], idGenerator = getPolarRowId) {
+  const select = document.createElement("select");
+  configureHTMLElement(select, id, parent, classList, textContent, idGenerator);
+  addOptionsToSelect(select, options, idGenerator);
+  return select;
+}
+function addOptionsToSelect(select, options, idGenerator = getPolarRowId) {
   for (let i = 0; i < options.length; i++) {
     const option_str = options[i];
     const option = document.createElement("option");
-    option.id = `${select.id}-${polarRowID}-${i}`;
+    option.id = `${select.id}-${i}-${idGenerator()}`;
     option.textContent = option_str;
     select.appendChild(option);
   }
+}
+function createDiv(id, parent = void 0, classList = [], textContent = "", idGenerator = getPolarRowId) {
+  const myDiv = document.createElement("div");
+  configureHTMLElement(myDiv, id, parent, classList, textContent, idGenerator);
+  return myDiv;
+}
+function createCanvas(id, parent = void 0, classList = [], textContent = "", idGenerator = getPolarRowId) {
+  const myCanvas = document.createElement("canvas");
+  configureHTMLElement(
+    myCanvas,
+    id,
+    parent,
+    classList,
+    textContent,
+    idGenerator
+  );
+  return myCanvas;
+}
+function configureHTMLElement(e, id, parent = void 0, classList = [], textContent = "", idGenerator = getPolarRowId) {
+  e.id = `${id}-${idGenerator()}`;
+  if (parent) {
+    parent.appendChild(e);
+  }
+  if (classList.length > 0) {
+    e.classList.add(...classList);
+  }
+  if (textContent.length > 0) {
+    e.textContent = textContent;
+  }
+  return e;
+}
+function getPolarRowId() {
+  return PolarVisRow.polarRowID;
 }
 
 // src/index.ts
