@@ -1556,26 +1556,28 @@ var PolarH10 = class {
       this.dataHandle[PolarSensorNames[i]] = [];
     }
   }
-  addEventListener = (type, handler) => {
+  addEventListener(type, handler) {
     if (!this.dataHandle[type].includes(handler)) {
       this.dataHandle[type].push(handler);
     }
-  };
-  removeEventListener = (type, handler) => {
-    if (this.dataHandle[type].includes(handler)) {
-      this.dataHandle[type].splice(this.dataHandle[type].indexOf(handler), 1);
+  }
+  removeEventListener(type, handler) {
+    let index = this.dataHandle[type].indexOf(handler);
+    if (index > -1) {
+      this.dataHandle[type].splice(index, 1);
     }
-  };
-  clearEventListner = (type) => {
+    return index;
+  }
+  clearEventListner(type) {
     delete this.dataHandle[type];
     this.dataHandle[type] = [];
-  };
-  log = (...o) => {
+  }
+  log(...o) {
     if (this.verbose) {
       console.log(...o);
     }
-  };
-  init = async () => {
+  }
+  async init() {
     this.server = await this.device.gatt?.connect();
     this.log(`Connecting to ${this.device.name} GATT server...`);
     this.PMDService = await this.server?.getPrimaryService(PMD_SERVICE_ID);
@@ -1595,26 +1597,24 @@ var PolarH10 = class {
     this.log(`    Got battery level characteristic`);
     this.PMDDataChar?.addEventListener(
       "characteristicvaluechanged",
-      this.PMDDataHandle
+      this.PMDDataHandle.bind(this)
     );
-  };
-  PMDCtrlCharHandle = (event) => {
-    this.log("PMDCtrlCharHandle");
+  }
+  PMDCtrlCharHandle(event) {
     this.log(event);
-  };
-  PMDCtrlDataHandle = (event) => {
-    this.log("PMDCtrlDataHandle");
+  }
+  PMDCtrlDataHandle(event) {
     this.log(event);
-  };
-  getBatteryLevel = async () => {
+  }
+  async getBatteryLevel() {
     let battRead = await this.BattLvlChar?.readValue();
     if (battRead) {
       return battRead.getUint8(0);
     } else {
       return 0;
     }
-  };
-  getPMDFeatures = async () => {
+  }
+  async getPMDFeatures() {
     const PMEFeatures = await this.PMDCtrlChar?.readValue();
     const featureList = [];
     if (PMEFeatures !== void 0) {
@@ -1631,11 +1631,11 @@ var PolarH10 = class {
       }
     }
     return featureList;
-  };
-  getSensorSettingsFromName = async (sensorName) => {
+  }
+  async getSensorSettingsFromName(sensorName) {
     return this.getSensorSettingsFromId(PolarSensorType[sensorName]);
-  };
-  parseSensorSettings = (val) => {
+  }
+  parseSensorSettings(val) {
     if (val.getUint8(0) == 240 && val.getUint8(1) == 1 /* GET_MEASUREMENT_SETTINGS */) {
       const info = {
         type: PolarSensorType[val.getUint8(2)],
@@ -1660,8 +1660,8 @@ var PolarH10 = class {
       }
       return info;
     }
-  };
-  getSensorSettingsFromId = async (sensorId) => {
+  }
+  async getSensorSettingsFromId(sensorId) {
     if (!this.streaming) {
       let sensorSettingPromiseRSLV;
       const sensorSettingPromise = new Promise((rslv, rjct) => {
@@ -1683,8 +1683,8 @@ var PolarH10 = class {
       await this.PMDCtrlChar?.writeValue(cmd_buf);
       return await sensorSettingPromise;
     }
-  };
-  PMDDataHandle = (event) => {
+  }
+  PMDDataHandle(event) {
     const val = event.target.value;
     const dataTimeStamp = val.getBigUint64(1, true);
     if (this.timeOffset === BigInt(0)) {
@@ -1728,8 +1728,8 @@ var PolarH10 = class {
     for (const handler of this.dataHandle[PolarSensorType[type]]) {
       handler(dataFrame);
     }
-  };
-  parseCtrlReply = (val) => {
+  }
+  parseCtrlReply(val) {
     if (val.getUint8(0) === 240) {
       const polar_cmd = val.getUint8(1);
       if (polar_cmd === 2 /* REQUEST_MEASUREMENT_START */ || polar_cmd === 3 /* REQUEST_MEASUREMENT_STOP */) {
@@ -1745,8 +1745,8 @@ var PolarH10 = class {
         return startReply;
       }
     }
-  };
-  startACC = async (rangeG = 4, sample_rate = 100, resolution = 16) => {
+  }
+  async startACC(rangeG = 4, sample_rate = 100, resolution = 16) {
     if (this.ACCStarted) {
       return;
     }
@@ -1785,8 +1785,8 @@ var PolarH10 = class {
       this.ACCStarted = true;
     }
     return startReply;
-  };
-  startECG = async (sample_rate = 130, resolution = 14) => {
+  }
+  async startECG(sample_rate = 130, resolution = 14) {
     if (this.ECGStarted) {
       return;
     }
@@ -1822,8 +1822,8 @@ var PolarH10 = class {
       this.ECGStarted = true;
     }
     return startReply;
-  };
-  stopECG = async () => {
+  }
+  async stopECG() {
     if (!this.ECGStarted) {
       return;
     }
@@ -1834,8 +1834,8 @@ var PolarH10 = class {
       this.ECGStarted = false;
     }
     return endReply;
-  };
-  stopACC = async () => {
+  }
+  async stopACC() {
     if (!this.ACCStarted) {
       return;
     }
@@ -1846,8 +1846,8 @@ var PolarH10 = class {
       this.ACCStarted = false;
     }
     return endReply;
-  };
-  stopSensor = async (sensorType) => {
+  }
+  async stopSensor(sensorType) {
     let endSensorRSLV;
     const endACCPromise = new Promise(
       (rslv, rjct) => {
@@ -1868,7 +1868,7 @@ var PolarH10 = class {
     cmd_buf[1] = sensorType;
     await this.PMDCtrlChar?.writeValue(cmd_buf);
     return await endACCPromise;
-  };
+  }
 };
 
 // src/PolarH10VisualizerRow.ts
@@ -2150,6 +2150,7 @@ var PolarVisRow = class _PolarVisRow {
     );
     this.EXGFormSelect.selectedIndex = 0;
     this.EXGFormSelect.onchange = this.changeEXGGraph.bind(this);
+    this.EXGFormSelect.disabled = true;
     this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
     const ACC_switch = createSwitch("ACC", this.onToggleACC.bind(this));
     this.ACCCtrlDiv.appendChild(ACC_switch);
@@ -2166,6 +2167,7 @@ var PolarVisRow = class _PolarVisRow {
     );
     this.ACCFormSelect.selectedIndex = 0;
     this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
+    this.ACCFormSelect.disabled = true;
   }
   async onToggleECG(ev) {
     this.ACCSwitchInput.disabled = true;
@@ -2273,6 +2275,7 @@ var PolarVisRow = class _PolarVisRow {
         "almost-full-height",
         width_class
       ]);
+      this.ACCDiv.addEventListener("wheel", this.onWheelACC.bind(this));
       this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
       this.acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
       this.acc_x_ts = new import_smoothie2.TimeSeries();
@@ -2940,6 +2943,9 @@ function polarConnectHandleGen(parentCoponent, btDeviceHandler) {
     }
     btDeviceHandler(parentCoponent, device);
   };
+}
+if (false) {
+  new EventSource("/esbuild").addEventListener("change", location_reload);
 }
 /*! Bundled license information:
 
