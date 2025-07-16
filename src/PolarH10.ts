@@ -26,7 +26,6 @@ export class PolarH10 {
   streaming: boolean = false;
   verbose: boolean = true;
   dataHandle: DataHandlerDict = {};
-  // dataHandle: ((data: PolarH10Data) => void)[];
   timeOffset: bigint = BigInt(0);
   eventTimeOffset: number;
   lastECGTimestamp: number;

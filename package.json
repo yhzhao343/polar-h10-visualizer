@@ -20,6 +20,7 @@
     "cp-file": "mkdir -p build && cp src/index.html build/ && cp src/style.css build/ && cp src/favicon.ico build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre.min.css build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre-icons.min.css build/",
     "dev": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:IS_PRODUCTION=false --watch --servedir=build --allow-overwrite --format=esm",
     "build": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:IS_PRODUCTION=true --allow-overwrite --format=esm",
+    "serve": "esbuild --servedir=build",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build"
   },

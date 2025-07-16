@@ -173,6 +173,8 @@ export const ERROR_MSGS = [
   "DEVICE IN CHARGER",
 ];
 
+export const LOW_BATT_LVL = 40;
+
 export const EXG_STREAM_DELAY_MS = 600;
 export const EXG_RMS_WINDOW_MS = 200;
 export const EXG_RMS_WINDOW_SIZE = Math.round(130 / (1000 / EXG_RMS_WINDOW_MS));
