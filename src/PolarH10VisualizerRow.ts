@@ -1,7 +1,7 @@
 import { SmoothieChart, TimeSeries } from "smoothie";
 import { CustomSmoothie } from "./CustomSmoothie";
 import { CalcCascades, IirFilter } from "fili";
-import { PolarH10 } from "./PolarH10";
+import { PolarH10 } from "polar-h10";
 import {
   DEFAULT_EXG_LINE_CHART_OPTION,
   DEFAULT_ACC_LINE_CHART_OPTION,
