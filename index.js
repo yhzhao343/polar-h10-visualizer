@@ -1981,26 +1981,28 @@ var PolarVisRow = class _PolarVisRow {
       await this.initPolarH10();
       await this.initDeviceInfo();
       await this.initDeviceGraphCtrl();
+      _PolarVisRow.polarRowID += 1;
+      _PolarVisRow.PolarVisRows.push(this);
     } catch (err) {
       this.disconnectPolarH10();
       alert(err);
     }
-    _PolarVisRow.polarRowID += 1;
-    _PolarVisRow.PolarVisRows.push(this);
   }
   removeSelf() {
+    if (this.parent.contains(this.polarSensorDiv)) {
+      this.parent.removeChild(this.polarSensorDiv);
+    }
     const myInd = _PolarVisRow.PolarVisRows.indexOf(this);
     if (myInd > -1) {
-      if (this.parent.contains(this.polarSensorDiv)) {
-        this.parent.removeChild(this.polarSensorDiv);
-      }
       _PolarVisRow.PolarVisRows.splice(myInd, 1);
-      if (myInd === _PolarVisRow.PolarVisRows.length) {
-        _PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
-      } else if (myInd === 0 && _PolarVisRow.PolarVisRows.length) {
-        _PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+      if (_PolarVisRow.PolarVisRows.length > 0) {
+        if (myInd === _PolarVisRow.PolarVisRows.length) {
+          _PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
+        } else if (myInd === 0) {
+          _PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+        }
+        _PolarVisRow.reOrderRows();
       }
-      _PolarVisRow.reOrderRows();
     }
   }
   static reOrderRows() {
@@ -2038,13 +2040,10 @@ var PolarVisRow = class _PolarVisRow {
       await this.polarH10.init();
     } catch (err) {
       console.log(err);
-      alert(err);
-      this.removeSelf();
       throw new Error("polarH10 device initialization failed!");
     }
   }
   async disconnectPolarH10(ev = void 0) {
-    this.device.gatt?.disconnect();
     this.removeSelf();
     if (this.ecg_chart !== void 0) {
       this.ecg_chart.stop();
@@ -2054,6 +2053,8 @@ var PolarVisRow = class _PolarVisRow {
     }
     if (this.ECGDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ECGDiv);
+      this.polarH10.removeEventListener("ECG", this.newECGCallback);
+      await this.polarH10.stopECG();
     }
     this.resetECG();
     if (this.acc_chart !== void 0) {
@@ -2064,8 +2065,11 @@ var PolarVisRow = class _PolarVisRow {
     }
     if (this.ACCDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ACCDiv);
+      this.polarH10.removeEventListener("ACC", this.newACCCallback);
+      await this.polarH10.stopACC();
     }
     this.resetACC();
+    this.device.gatt?.disconnect();
   }
   resetECG() {
     this.ecg_canvas = void 0;
@@ -2250,12 +2254,15 @@ var PolarVisRow = class _PolarVisRow {
     _PolarVisRow.PolarVisRows[this.order] = this;
     _PolarVisRow.PolarVisRows[prevRow.order] = prevRow;
     if (this.order === 0) {
-      _PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = true;
-      _PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = false;
+      this.orderUpBtn.disabled = true;
+      this.orderDownBtn.disabled = false;
+      prevRow.orderUpBtn.disabled = false;
+    } else if (this.order === _PolarVisRow.PolarVisRows.length - 2) {
+      this.orderDownBtn.disabled = false;
     }
     if (prevRow.order === _PolarVisRow.PolarVisRows.length - 1) {
-      _PolarVisRow.PolarVisRows[prevRow.order].orderDownBtn.disabled = true;
-      _PolarVisRow.PolarVisRows[prevRow.order].orderUpBtn.disabled = false;
+      prevRow.orderDownBtn.disabled = true;
+      prevRow.orderUpBtn.disabled = false;
     }
   }
   moveDown(ev) {
@@ -2267,12 +2274,15 @@ var PolarVisRow = class _PolarVisRow {
     _PolarVisRow.PolarVisRows[this.order] = this;
     _PolarVisRow.PolarVisRows[nextRow.order] = nextRow;
     if (this.order === _PolarVisRow.PolarVisRows.length - 1) {
-      _PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = false;
-      _PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = true;
+      this.orderUpBtn.disabled = false;
+      this.orderDownBtn.disabled = true;
+      nextRow.orderDownBtn.disabled = false;
+    } else if (this.order === 1) {
+      this.orderUpBtn.disabled = false;
     }
     if (nextRow.order === 0) {
-      _PolarVisRow.PolarVisRows[nextRow.order].orderDownBtn.disabled = false;
-      _PolarVisRow.PolarVisRows[nextRow.order].orderUpBtn.disabled = true;
+      nextRow.orderDownBtn.disabled = false;
+      nextRow.orderUpBtn.disabled = true;
     }
   }
   async onToggleECG(ev) {
@@ -2328,11 +2338,13 @@ var PolarVisRow = class _PolarVisRow {
         this.EXGFormSelect.disabled = false;
         this.EXGFormSelect.selectedIndex = 0;
       }
-      this.polarH10.addEventListener("ECG", this.newECGCallback);
       try {
         const startECGReply = await this.polarH10.startECG(EXG_SAMPLE_RATE_HZ);
-        if (startECGReply) {
+        if (startECGReply?.error === "SUCCESS" || startECGReply?.error === "ALREADY IN STATE") {
+          this.polarH10.addEventListener("ECG", this.newECGCallback);
+        } else {
           console.log(startECGReply);
+          this.disconnectPolarH10();
         }
       } catch (e) {
         console.log(e);
@@ -2428,14 +2440,16 @@ var PolarVisRow = class _PolarVisRow {
         this.ACCFormSelect.disabled = false;
         this.ACCFormSelect.selectedIndex = 0;
       }
-      this.polarH10.addEventListener("ACC", this.newACCCallback);
       try {
-        const startACCReply = await this.polarH10.startACC(
+        let startACCReply = await this.polarH10.startACC(
           ACC_RANGE_G,
           ACC_SAMPLE_RATE_HZ
         );
-        if (startACCReply) {
+        if (startACCReply?.error === "SUCCESS" || startACCReply?.error === "ALREADY IN STATE") {
+          this.polarH10.addEventListener("ACC", this.newACCCallback);
+        } else {
           console.log(startACCReply);
+          this.disconnectPolarH10();
         }
       } catch (e) {
         console.log(e);
@@ -2661,24 +2675,37 @@ var PolarVisRow = class _PolarVisRow {
   _newECGCallback(data) {
     if (this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.ecg_rms_iir !== void 0) {
       const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / data.samples.length;
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
-        const data_i = data.samples[s_i];
-        const data_i_timeout_ms = s_i * estimated_sample_interval;
-        tsUpdate(this.ecg_ts, data_i, timestamp, data_i_timeout_ms);
-        const filtered_data_i = this.ecg_rms_iir.singleStep(data_i);
-        tsUpdate(this.ecg_hp_ts, filtered_data_i, timestamp, data_i_timeout_ms);
-        if (this.ecg_rms_win !== void 0) {
-          if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
-            this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
-            this.ecg_rms_win_i++;
-          } else {
-            this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
-            this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
-            const data_rms_i = rms(this.ecg_rms_win);
-            tsUpdate(this.ecg_rms_ts, data_rms_i, timestamp, data_i_timeout_ms);
-          }
+      const samples = Array.from(data.samples);
+      const filteredSamples = this.ecg_rms_iir.multiStep(samples);
+      const dataTimeout = Array.from({ length: samples.length }, (_, s_i) => {
+        return s_i * estimated_sample_interval;
+      });
+      const samplesTimestamps = Array.from(
+        { length: samples.length },
+        (_, s_i) => {
+          return data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
         }
+      );
+      for (let s_i = 0; s_i < samples.length; s_i++) {
+        setTimeout(() => {
+          const timestamp = samplesTimestamps[s_i];
+          this.ecg_ts?.append(timestamp, samples[s_i]);
+          const filtered_data_i = filteredSamples[s_i];
+          this.ecg_hp_ts?.append(timestamp, filtered_data_i);
+          if (this.ecg_rms_win !== void 0) {
+            if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
+              this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
+              this.ecg_rms_win_i++;
+            } else {
+              this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
+              this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
+            }
+            if (this.ecg_rms_win_i === EXG_RMS_WINDOW_SIZE) {
+              const data_rms_i = rms(this.ecg_rms_win);
+              this.ecg_rms_ts?.append(timestamp, data_rms_i);
+            }
+          }
+        }, dataTimeout[s_i]);
       }
     }
   }
