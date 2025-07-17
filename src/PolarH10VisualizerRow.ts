@@ -146,29 +146,29 @@ class PolarVisRow {
       await this.initPolarH10();
       await this.initDeviceInfo();
       await this.initDeviceGraphCtrl();
+      PolarVisRow.polarRowID += 1;
+      PolarVisRow.PolarVisRows.push(this);
     } catch (err) {
       this.disconnectPolarH10();
       alert(err);
     }
-    PolarVisRow.polarRowID += 1;
-    PolarVisRow.PolarVisRows.push(this);
   }
 
   private removeSelf() {
+    if (this.parent.contains(this.polarSensorDiv)) {
+      this.parent.removeChild(this.polarSensorDiv);
+    }
     const myInd = PolarVisRow.PolarVisRows.indexOf(this);
     if (myInd > -1) {
-      if (this.parent.contains(this.polarSensorDiv)) {
-        this.parent.removeChild(this.polarSensorDiv);
-      }
       PolarVisRow.PolarVisRows.splice(myInd, 1);
-
-      if (myInd === PolarVisRow.PolarVisRows.length) {
-        PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
-      } else if (myInd === 0 && PolarVisRow.PolarVisRows.length) {
-        PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+      if (PolarVisRow.PolarVisRows.length > 0) {
+        if (myInd === PolarVisRow.PolarVisRows.length) {
+          PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
+        } else if (myInd === 0) {
+          PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+        }
+        PolarVisRow.reOrderRows();
       }
-
-      PolarVisRow.reOrderRows();
     }
   }
   private static reOrderRows() {
@@ -211,17 +211,11 @@ class PolarVisRow {
       await this.polarH10.init();
     } catch (err) {
       console.log(err);
-      alert(err);
-      this.removeSelf();
       throw new Error("polarH10 device initialization failed!");
     }
   }
 
   async disconnectPolarH10(ev: any = undefined) {
-    this.device.gatt?.disconnect();
-    // if (this.parent.contains(this.polarSensorDiv)) {
-    //   this.parent.removeChild(this.polarSensorDiv);
-    // }
     this.removeSelf();
     if (this.ecg_chart !== undefined) {
       this.ecg_chart.stop();
@@ -231,6 +225,9 @@ class PolarVisRow {
     }
     if (this.ECGDiv !== undefined) {
       this.visContainerDiv?.removeChild(this.ECGDiv);
+
+      this.polarH10.removeEventListener("ECG", this.newECGCallback);
+      await this.polarH10.stopECG();
     }
     this.resetECG();
 
@@ -242,8 +239,12 @@ class PolarVisRow {
     }
     if (this.ACCDiv !== undefined) {
       this.visContainerDiv?.removeChild(this.ACCDiv);
+      this.polarH10.removeEventListener("ACC", this.newACCCallback);
+      await this.polarH10.stopACC();
     }
     this.resetACC();
+
+    this.device.gatt?.disconnect();
   }
 
   resetECG() {
@@ -447,23 +448,22 @@ class PolarVisRow {
 
   moveUp(ev: any) {
     this.order -= 1;
-    // this.polarSensorDiv.setAttribute("order", this.order.toString());
     this.polarSensorDiv.style.order = this.order.toString();
     const prevRow = PolarVisRow.PolarVisRows[this.order];
     prevRow.order += 1;
     prevRow.polarSensorDiv.style.order = prevRow.order.toString();
-    // prevRow.polarSensorDiv.setAttribute("order", prevRow.order.toString());
-    // this.parent.removeChild(this.polarSensorDiv);
-    // this.parent.insertBefore(this.polarSensorDiv, prevRow.polarSensorDiv);
     PolarVisRow.PolarVisRows[this.order] = this;
     PolarVisRow.PolarVisRows[prevRow.order] = prevRow;
     if (this.order === 0) {
-      PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = true;
-      PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = false;
+      this.orderUpBtn.disabled = true;
+      this.orderDownBtn.disabled = false;
+      prevRow.orderUpBtn.disabled = false;
+    } else if (this.order === PolarVisRow.PolarVisRows.length - 2) {
+      this.orderDownBtn.disabled = false;
     }
     if (prevRow.order === PolarVisRow.PolarVisRows.length - 1) {
-      PolarVisRow.PolarVisRows[prevRow.order].orderDownBtn.disabled = true;
-      PolarVisRow.PolarVisRows[prevRow.order].orderUpBtn.disabled = false;
+      prevRow.orderDownBtn.disabled = true;
+      prevRow.orderUpBtn.disabled = false;
     }
   }
 
@@ -473,18 +473,19 @@ class PolarVisRow {
     const nextRow = PolarVisRow.PolarVisRows[this.order];
     nextRow.order -= 1;
     nextRow.polarSensorDiv.style.order = nextRow.order.toString();
-    // this.parent.removeChild(nextRow.polarSensorDiv);
-    // this.parent.insertBefore(nextRow.polarSensorDiv, this.polarSensorDiv);
     PolarVisRow.PolarVisRows[this.order] = this;
     PolarVisRow.PolarVisRows[nextRow.order] = nextRow;
 
     if (this.order === PolarVisRow.PolarVisRows.length - 1) {
-      PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = false;
-      PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = true;
+      this.orderUpBtn.disabled = false;
+      this.orderDownBtn.disabled = true;
+      nextRow.orderDownBtn.disabled = false;
+    } else if (this.order === 1) {
+      this.orderUpBtn.disabled = false;
     }
     if (nextRow.order === 0) {
-      PolarVisRow.PolarVisRows[nextRow.order].orderDownBtn.disabled = false;
-      PolarVisRow.PolarVisRows[nextRow.order].orderUpBtn.disabled = true;
+      nextRow.orderDownBtn.disabled = false;
+      nextRow.orderUpBtn.disabled = true;
     }
   }
 
@@ -546,12 +547,16 @@ class PolarVisRow {
         this.EXGFormSelect.selectedIndex = 0;
       }
 
-      this.polarH10.addEventListener("ECG", this.newECGCallback);
-
       try {
         const startECGReply = await this.polarH10.startECG(EXG_SAMPLE_RATE_HZ);
-        if (startECGReply) {
+        if (
+          startECGReply?.error === "SUCCESS" ||
+          startECGReply?.error === "ALREADY IN STATE"
+        ) {
+          this.polarH10.addEventListener("ECG", this.newECGCallback);
+        } else {
           console.log(startECGReply);
+          this.disconnectPolarH10();
         }
       } catch (e) {
         console.log(e);
@@ -658,15 +663,19 @@ class PolarVisRow {
         this.ACCFormSelect.selectedIndex = 0;
       }
 
-      this.polarH10.addEventListener("ACC", this.newACCCallback);
-
       try {
-        const startACCReply = await this.polarH10.startACC(
+        let startACCReply = await this.polarH10.startACC(
           ACC_RANGE_G,
           ACC_SAMPLE_RATE_HZ,
         );
-        if (startACCReply) {
+        if (
+          startACCReply?.error === "SUCCESS" ||
+          startACCReply?.error === "ALREADY IN STATE"
+        ) {
+          this.polarH10.addEventListener("ACC", this.newACCCallback);
+        } else {
           console.log(startACCReply);
+          this.disconnectPolarH10();
         }
       } catch (e) {
         console.log(e);
@@ -955,31 +964,42 @@ class PolarVisRow {
       const estimated_sample_interval =
         (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
         data.samples.length;
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const timestamp =
-          data.event_time_offset_ms +
-          data.prev_sample_timestamp_ms +
-          estimated_sample_interval * (s_i + 1);
+      const samples = Array.from(data.samples);
+      const filteredSamples = this.ecg_rms_iir.multiStep(samples);
+      const dataTimeout = Array.from({ length: samples.length }, (_, s_i) => {
+        return s_i * estimated_sample_interval;
+      });
+      const samplesTimestamps = Array.from(
+        { length: samples.length },
+        (_, s_i) => {
+          return (
+            data.event_time_offset_ms +
+            data.prev_sample_timestamp_ms +
+            estimated_sample_interval * (s_i + 1)
+          );
+        },
+      );
 
-        const data_i = (data.samples as Int32Array)[s_i];
-        const data_i_timeout_ms = s_i * estimated_sample_interval;
-
-        tsUpdate(this.ecg_ts, data_i, timestamp, data_i_timeout_ms);
-
-        const filtered_data_i = this.ecg_rms_iir.singleStep(data_i);
-        tsUpdate(this.ecg_hp_ts, filtered_data_i, timestamp, data_i_timeout_ms);
-
-        if (this.ecg_rms_win !== undefined) {
-          if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
-            this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
-            this.ecg_rms_win_i++;
-          } else {
-            this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
-            this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
-            const data_rms_i = rms(this.ecg_rms_win);
-            tsUpdate(this.ecg_rms_ts, data_rms_i, timestamp, data_i_timeout_ms);
+      for (let s_i = 0; s_i < samples.length; s_i++) {
+        setTimeout(() => {
+          const timestamp = samplesTimestamps[s_i];
+          this.ecg_ts?.append(timestamp, samples[s_i]);
+          const filtered_data_i = filteredSamples[s_i];
+          this.ecg_hp_ts?.append(timestamp, filtered_data_i);
+          if (this.ecg_rms_win !== undefined) {
+            if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
+              this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
+              this.ecg_rms_win_i++;
+            } else {
+              this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
+              this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
+            }
+            if (this.ecg_rms_win_i === EXG_RMS_WINDOW_SIZE) {
+              const data_rms_i = rms(this.ecg_rms_win);
+              this.ecg_rms_ts?.append(timestamp, data_rms_i);
+            }
           }
-        }
+        }, dataTimeout[s_i]);
       }
     }
   }
