@@ -101,8 +101,9 @@ class PolarVisRow {
   ecg_chart: CustomSmoothie | undefined = undefined;
   ecg_ts: TimeSeries | undefined = undefined;
   ecg_hp_ts: TimeSeries | undefined = undefined;
-  ecg_rms_win: Float64Array | undefined = undefined;
-  ecg_rms_win_i = 0;
+  ecg_ss_win: Float64Array | undefined = undefined;
+  ecg_ss_win_i = 0;
+  ecg_ss: number;
   ecg_rms_ts: TimeSeries | undefined = undefined;
   ecg_resize_observer: ResizeObserver | undefined = undefined;
   ecg_rms_iir_coef = undefined;
@@ -251,7 +252,7 @@ class PolarVisRow {
     this.ecg_canvas = undefined;
     this.ECGDiv = undefined;
     this.ecg_resize = undefined;
-    this.ecg_rms_win = undefined;
+    this.ecg_ss_win = undefined;
     this.ecg_chart = undefined;
     this.ecg_ts = undefined;
     this.ecg_hp_ts = undefined;
@@ -259,7 +260,8 @@ class PolarVisRow {
     this.ecg_resize_observer = undefined;
     this.ecg_rms_iir_coef = undefined;
     this.ecg_rms_iir = undefined;
-    this.ecg_rms_win_i = 0;
+    this.ecg_ss_win_i = 0;
+    this.ecg_ss = 0;
   }
 
   resetACC() {
@@ -520,8 +522,9 @@ class PolarVisRow {
       this.ecg_rms_ts = new TimeSeries();
       this.ecg_hp_ts = new TimeSeries();
       this.ecg_chart.addPostRenderCallback(exg_legend);
-      this.ecg_rms_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
-      this.ecg_rms_win_i = 0;
+      this.ecg_ss_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
+      this.ecg_ss_win_i = 0;
+      this.ecg_ss = 0;
 
       this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
       this.ecg_resize_observer = new ResizeObserver((entries) => {
@@ -966,6 +969,7 @@ class PolarVisRow {
         data.samples.length;
       const samples = Array.from(data.samples);
       const filteredSamples = this.ecg_rms_iir.multiStep(samples);
+      const filteredSamplesSquared = filteredSamples.map(e => e * e);
       const dataTimeout = Array.from({ length: samples.length }, (_, s_i) => {
         return s_i * estimated_sample_interval;
       });
@@ -983,19 +987,24 @@ class PolarVisRow {
       for (let s_i = 0; s_i < samples.length; s_i++) {
         setTimeout(() => {
           const timestamp = samplesTimestamps[s_i];
-          this.ecg_ts?.append(timestamp, samples[s_i]);
-          const filtered_data_i = filteredSamples[s_i];
-          this.ecg_hp_ts?.append(timestamp, filtered_data_i);
-          if (this.ecg_rms_win !== undefined) {
-            if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
-              this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
-              this.ecg_rms_win_i++;
+          const sample_i = samples[s_i];
+          const filtered_sample_i = filteredSamples[s_i];
+          const filtered_sample_squared_i = filteredSamplesSquared[s_i];
+          this.ecg_ts?.append(timestamp, sample_i);
+          this.ecg_hp_ts?.append(timestamp, filtered_sample_i);
+
+          if (this.ecg_ss_win !== undefined) {
+            this.ecg_ss += filtered_sample_squared_i;
+            if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
+              this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
+              this.ecg_ss_win_i++;
             } else {
-              this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
-              this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
+              this.ecg_ss -= this.ecg_ss_win[0];
+              this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
+              this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_sample_squared_i;
             }
-            if (this.ecg_rms_win_i === EXG_RMS_WINDOW_SIZE) {
-              const data_rms_i = rms(this.ecg_rms_win);
+            if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
+              const data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
               this.ecg_rms_ts?.append(timestamp, data_rms_i);
             }
           }
