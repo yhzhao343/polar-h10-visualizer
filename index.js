@@ -1940,8 +1940,9 @@ var PolarVisRow = class _PolarVisRow {
   ecg_chart = void 0;
   ecg_ts = void 0;
   ecg_hp_ts = void 0;
-  ecg_rms_win = void 0;
-  ecg_rms_win_i = 0;
+  ecg_ss_win = void 0;
+  ecg_ss_win_i = 0;
+  ecg_ss;
   ecg_rms_ts = void 0;
   ecg_resize_observer = void 0;
   ecg_rms_iir_coef = void 0;
@@ -2075,7 +2076,7 @@ var PolarVisRow = class _PolarVisRow {
     this.ecg_canvas = void 0;
     this.ECGDiv = void 0;
     this.ecg_resize = void 0;
-    this.ecg_rms_win = void 0;
+    this.ecg_ss_win = void 0;
     this.ecg_chart = void 0;
     this.ecg_ts = void 0;
     this.ecg_hp_ts = void 0;
@@ -2083,7 +2084,8 @@ var PolarVisRow = class _PolarVisRow {
     this.ecg_resize_observer = void 0;
     this.ecg_rms_iir_coef = void 0;
     this.ecg_rms_iir = void 0;
-    this.ecg_rms_win_i = 0;
+    this.ecg_ss_win_i = 0;
+    this.ecg_ss = 0;
   }
   resetACC() {
     this.ACCDiv = void 0;
@@ -2314,8 +2316,9 @@ var PolarVisRow = class _PolarVisRow {
       this.ecg_rms_ts = new import_smoothie2.TimeSeries();
       this.ecg_hp_ts = new import_smoothie2.TimeSeries();
       this.ecg_chart.addPostRenderCallback(exg_legend);
-      this.ecg_rms_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
-      this.ecg_rms_win_i = 0;
+      this.ecg_ss_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
+      this.ecg_ss_win_i = 0;
+      this.ecg_ss = 0;
       this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
       this.ecg_resize_observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
@@ -2675,65 +2678,67 @@ var PolarVisRow = class _PolarVisRow {
   _newECGCallback(data) {
     if (this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.ecg_rms_iir !== void 0) {
       const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / data.samples.length;
-      const samples = Array.from(data.samples);
-      const filteredSamples = this.ecg_rms_iir.multiStep(samples);
-      const dataTimeout = Array.from({ length: samples.length }, (_, s_i) => {
-        return s_i * estimated_sample_interval;
-      });
-      const samplesTimestamps = Array.from(
-        { length: samples.length },
-        (_, s_i) => {
-          return data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (s_i + 1);
-        }
-      );
-      for (let s_i = 0; s_i < samples.length; s_i++) {
-        setTimeout(() => {
-          const timestamp = samplesTimestamps[s_i];
-          this.ecg_ts?.append(timestamp, samples[s_i]);
-          const filtered_data_i = filteredSamples[s_i];
-          this.ecg_hp_ts?.append(timestamp, filtered_data_i);
-          if (this.ecg_rms_win !== void 0) {
-            if (this.ecg_rms_win_i < EXG_RMS_WINDOW_SIZE) {
-              this.ecg_rms_win[this.ecg_rms_win_i] = filtered_data_i;
-              this.ecg_rms_win_i++;
-            } else {
-              this.ecg_rms_win.set(this.ecg_rms_win.subarray(1));
-              this.ecg_rms_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_data_i;
-            }
-            if (this.ecg_rms_win_i === EXG_RMS_WINDOW_SIZE) {
-              const data_rms_i = rms(this.ecg_rms_win);
-              this.ecg_rms_ts?.append(timestamp, data_rms_i);
-            }
+      const timeOffset = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval;
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const plotDelay = s_i * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const sample_i = data.samples[s_i];
+        const filtered_sample_i = this.ecg_rms_iir.singleStep(sample_i);
+        const filtered_sample_squared_i = filtered_sample_i * filtered_sample_i;
+        let data_rms_i = void 0;
+        if (this.ecg_ss_win !== void 0) {
+          this.ecg_ss += filtered_sample_squared_i;
+          if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
+            this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
+            this.ecg_ss_win_i++;
+          } else {
+            this.ecg_ss -= this.ecg_ss_win[0];
+            this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
+            this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_sample_squared_i;
           }
-        }, dataTimeout[s_i]);
+          if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
+            data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
+          }
+        }
+        setTimeout(() => {
+          this.ecg_ts?.append(timestamp, sample_i);
+          this.ecg_hp_ts?.append(timestamp, filtered_sample_i);
+          if (data_rms_i !== void 0) {
+            this.ecg_rms_ts?.append(timestamp, data_rms_i);
+          }
+        }, plotDelay);
       }
     }
   }
   _newACCCallback(data) {
     if (this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.acc_x_iir !== void 0 && this.acc_y_iir !== void 0 && this.acc_z_iir !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0) {
-      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / (data.samples.length / 3);
+      const numFrame = data.samples.length / 3;
+      const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
+      const timeOffset = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval;
       for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
         const frameNum = Math.floor(s_i / 3);
-        const timestamp = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval * (frameNum + 1);
-        const data_i_timeout_ms = frameNum * estimated_sample_interval;
+        const plotDelay = frameNum * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
         const y_d = -data.samples[s_i];
         const x_d = -data.samples[s_i + 1];
         const z_d = data.samples[s_i + 2];
-        tsUpdate(this.acc_x_ts, x_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_y_ts, y_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_z_ts, z_d, timestamp, data_i_timeout_ms);
         const x_lp_d = this.acc_x_iir.singleStep(x_d);
         const y_lp_d = this.acc_y_iir.singleStep(y_d);
         const z_lp_d = this.acc_z_iir.singleStep(z_d);
-        tsUpdate(this.acc_x_lp_ts, x_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_y_lp_ts, y_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_z_lp_ts, z_lp_d, timestamp, data_i_timeout_ms);
         const rho = Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
         const phi = Math.atan(y_lp_d / Math.sqrt(x_lp_d * x_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
         const theta = Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) / Math.PI * 180;
-        tsUpdate(this.acc_rho_ts, rho, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_phi_ts, phi, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_theta_ts, theta, timestamp, data_i_timeout_ms);
+        setTimeout(() => {
+          this.acc_x_ts?.append(timestamp, x_d);
+          this.acc_y_ts?.append(timestamp, y_d);
+          this.acc_z_ts?.append(timestamp, z_d);
+          this.acc_x_lp_ts?.append(timestamp, x_lp_d);
+          this.acc_y_lp_ts?.append(timestamp, y_lp_d);
+          this.acc_z_lp_ts?.append(timestamp, z_lp_d);
+          this.acc_rho_ts?.append(timestamp, rho);
+          this.acc_phi_ts?.append(timestamp, phi);
+          this.acc_theta_ts?.append(timestamp, theta);
+        }, plotDelay);
       }
     }
   }
@@ -2950,19 +2955,6 @@ function acc_lp_legend(canvas, time) {
     ctx.fillText("\u2015 Lowpass Z axis (mG)", 330, 5);
     ctx.restore();
   }
-}
-function rms(arr) {
-  const squares = arr.map((e) => e * e);
-  let sum = 0;
-  for (let i = 0; i < squares.length; i++) {
-    sum += squares[i];
-  }
-  return Math.sqrt(sum / arr.length);
-}
-function tsUpdate(ts, val, timestamp_ms, delay_ms) {
-  setTimeout(() => {
-    ts.append(timestamp_ms, val);
-  }, delay_ms);
 }
 function createSelect(id, parent = void 0, classList = [], textContent = "", options = [], idGenerator = getPolarRowId) {
   const select = document.createElement("select");
