@@ -1290,34 +1290,23 @@ var CustomSmoothie = class extends import_smoothie.SmoothieChart {
 // src/PolarH10VisualizerRow.ts
 var import_fili = __toESM(require_fili_min(), 1);
 
-// src/consts.ts
+// node_modules/polar-h10/dist/esm/index.js
 var PMD_SERVICE_ID = "fb005c80-02e7-f387-1cad-8acd2d8df0c8";
 var PMD_CTRL_CHAR = "fb005c81-02e7-f387-1cad-8acd2d8df0c8";
 var PMD_DATA_CHAR = "fb005c82-02e7-f387-1cad-8acd2d8df0c8";
-var PolarSensorType = /* @__PURE__ */ ((PolarSensorType2) => {
-  PolarSensorType2[PolarSensorType2["ECG"] = 0] = "ECG";
-  PolarSensorType2[PolarSensorType2["PPG"] = 1] = "PPG";
-  PolarSensorType2[PolarSensorType2["ACC"] = 2] = "ACC";
-  PolarSensorType2[PolarSensorType2["PPI"] = 3] = "PPI";
-  PolarSensorType2[PolarSensorType2["GYRO"] = 5] = "GYRO";
-  PolarSensorType2[PolarSensorType2["MAGNETOMETER"] = 6] = "MAGNETOMETER";
-  PolarSensorType2[PolarSensorType2["SDK_MODE"] = 9] = "SDK_MODE";
-  PolarSensorType2[PolarSensorType2["LOCATION"] = 10] = "LOCATION";
-  PolarSensorType2[PolarSensorType2["PRESSURE"] = 11] = "PRESSURE";
-  PolarSensorType2[PolarSensorType2["TEMPERATURE"] = 12] = "TEMPERATURE";
-  return PolarSensorType2;
+var PolarSensorType = /* @__PURE__ */ ((PolarSensorType22) => {
+  PolarSensorType22[PolarSensorType22["ECG"] = 0] = "ECG";
+  PolarSensorType22[PolarSensorType22["PPG"] = 1] = "PPG";
+  PolarSensorType22[PolarSensorType22["ACC"] = 2] = "ACC";
+  PolarSensorType22[PolarSensorType22["PPI"] = 3] = "PPI";
+  PolarSensorType22[PolarSensorType22["GYRO"] = 5] = "GYRO";
+  PolarSensorType22[PolarSensorType22["MAGNETOMETER"] = 6] = "MAGNETOMETER";
+  PolarSensorType22[PolarSensorType22["SDK_MODE"] = 9] = "SDK_MODE";
+  PolarSensorType22[PolarSensorType22["LOCATION"] = 10] = "LOCATION";
+  PolarSensorType22[PolarSensorType22["PRESSURE"] = 11] = "PRESSURE";
+  PolarSensorType22[PolarSensorType22["TEMPERATURE"] = 12] = "TEMPERATURE";
+  return PolarSensorType22;
 })(PolarSensorType || {});
-var BODY_PARTS = [
-  "",
-  "LShoulder",
-  "RShoulder",
-  "Chest",
-  "MiddleSpine",
-  "LowerSpine",
-  "Hip",
-  "LThigh",
-  "RThigh"
-];
 var PolarSettingType = /* @__PURE__ */ ((PolarSettingType2) => {
   PolarSettingType2[PolarSettingType2["SAMPLE_RATE"] = 0] = "SAMPLE_RATE";
   PolarSettingType2[PolarSettingType2["RESOLUTION"] = 1] = "RESOLUTION";
@@ -1371,16 +1360,6 @@ var PolarSensorNames = Object.keys(PolarSensorType).filter(
 var PolarPMDCommandNames = Object.keys(PolarPMDCommand).filter(
   (t) => isNaN(Number(t))
 );
-var date2000 = /* @__PURE__ */ new Date("2000-01-01T00:00:00Z");
-var date2018 = /* @__PURE__ */ new Date("2018-01-01T00:00:00Z");
-var EPOCH2000_OFFSET_MS = date2000.valueOf();
-var EPOCH2000_OFFSET_NS = BigInt(EPOCH2000_OFFSET_MS) * BigInt(1e6);
-var EPOCH2018_OFFSET_MS = date2018.valueOf();
-var EPOCH2018_OFFSET_NS = BigInt(EPOCH2018_OFFSET_MS) * BigInt(1e6);
-var EXTRA_OFFSET_NS = EPOCH2018_OFFSET_NS - EPOCH2000_OFFSET_NS;
-var EXTRA_OFFSET_MS_WHOLE = EXTRA_OFFSET_NS / BigInt(1e6);
-var EXTRA_OFFSET_MS_DECIMAL = Number(EXTRA_OFFSET_NS - EXTRA_OFFSET_MS_WHOLE * BigInt(1e6)) / 1e6;
-var EXTRA_OFFSET_MS = EXTRA_OFFSET_MS_DECIMAL + Number(EXTRA_OFFSET_MS_DECIMAL);
 var ERROR_MSGS = [
   "SUCCESS",
   "INVALID OP CODE",
@@ -1397,6 +1376,373 @@ var ERROR_MSGS = [
   "INVALID STATE",
   "DEVICE IN CHARGER"
 ];
+var PolarH10 = class {
+  device;
+  server = void 0;
+  PMDService = void 0;
+  PMDCtrlChar = void 0;
+  PMDDataChar = void 0;
+  BattService = void 0;
+  BattLvlChar = void 0;
+  streaming = false;
+  verbose = true;
+  dataHandle = {};
+  timeOffset = BigInt(0);
+  eventTimeOffset;
+  lastECGTimestamp;
+  lastACCTimestamp;
+  ACCStarted = false;
+  ECGStarted = false;
+  constructor(device, verbose = true) {
+    this.device = device;
+    this.verbose = verbose;
+    this.lastECGTimestamp = 0;
+    this.lastACCTimestamp = 0;
+    this.ACCStarted = false;
+    this.ECGStarted = false;
+    for (let i = 0; i < PolarSensorNames.length; i++) {
+      this.dataHandle[PolarSensorNames[i]] = [];
+    }
+  }
+  addEventListener(type, handler) {
+    if (!this.dataHandle[type].includes(handler)) {
+      this.dataHandle[type].push(handler);
+    }
+  }
+  removeEventListener(type, handler) {
+    let index = this.dataHandle[type].indexOf(handler);
+    if (index > -1) {
+      this.dataHandle[type].splice(index, 1);
+    }
+    return index;
+  }
+  clearEventListner(type) {
+    delete this.dataHandle[type];
+    this.dataHandle[type] = [];
+  }
+  log(...o) {
+    if (this.verbose) {
+      console.log(...o);
+    }
+  }
+  async init() {
+    this.server = await this.device.gatt?.connect();
+    this.log(`Connecting to ${this.device.name} GATT server...`);
+    this.PMDService = await this.server?.getPrimaryService(PMD_SERVICE_ID);
+    this.log(`  Got PMD Service`);
+    this.PMDCtrlChar = await this.PMDService?.getCharacteristic(PMD_CTRL_CHAR);
+    this.log(`    Got PMD control characteristic`);
+    await this.PMDCtrlChar?.startNotifications();
+    this.log(`    Start notification`);
+    this.PMDDataChar = await this.PMDService?.getCharacteristic(PMD_DATA_CHAR);
+    this.log(`    Got PMD data characteristic`);
+    await this.PMDDataChar?.startNotifications();
+    this.log(`    Start notification`);
+    this.streaming = false;
+    this.BattService = await this.server?.getPrimaryService("battery_service");
+    this.log(`  Got battery Service`);
+    this.BattLvlChar = await this.BattService?.getCharacteristic("battery_level");
+    this.log(`    Got battery level characteristic`);
+    this.PMDDataChar?.addEventListener(
+      "characteristicvaluechanged",
+      this.PMDDataHandle.bind(this)
+    );
+  }
+  PMDCtrlCharHandle(event) {
+    this.log(event);
+  }
+  PMDCtrlDataHandle(event) {
+    this.log(event);
+  }
+  async getBatteryLevel() {
+    let battRead = await this.BattLvlChar?.readValue();
+    if (battRead) {
+      return battRead.getUint8(0);
+    } else {
+      return 0;
+    }
+  }
+  async getPMDFeatures() {
+    const PMEFeatures = await this.PMDCtrlChar?.readValue();
+    const featureList = [];
+    if (PMEFeatures !== void 0) {
+      if (PMEFeatures.byteLength === 17) {
+        if (PMEFeatures.getUint8(0) === 15) {
+          const feature_num = PMEFeatures.getUint8(1);
+          for (let i = 0; i < PolarSensorNames.length; i++) {
+            const sensor_name = PolarSensorNames[i];
+            if (feature_num >> PolarSensorType[sensor_name] & 1) {
+              featureList.push(sensor_name);
+            }
+          }
+        }
+      }
+    }
+    return featureList;
+  }
+  async getSensorSettingsFromName(sensorName) {
+    return this.getSensorSettingsFromId(PolarSensorType[sensorName]);
+  }
+  parseSensorSettings(val) {
+    if (val.getUint8(0) == 240 && val.getUint8(1) == 1) {
+      const info = {
+        type: PolarSensorType[val.getUint8(2)],
+        error: ERROR_MSGS[val.getUint8(3)],
+        more_frames: val.getUint8(4),
+        settings: {}
+      };
+      let i = 5;
+      while (i < val.byteLength) {
+        const setting_type = val.getUint8(i);
+        i += 1;
+        const arr_len = val.getUint8(i);
+        i += 1;
+        const setting_name = PolarSettingType[setting_type];
+        info.settings[setting_name] = [];
+        for (let arr_i = 0; arr_i < arr_len; arr_i++) {
+          info.settings[setting_name].push(
+            setting_parsers[setting_name](val, i)
+          );
+          i += setting_parser_offsets[setting_name];
+        }
+      }
+      return info;
+    }
+  }
+  async getSensorSettingsFromId(sensorId) {
+    if (!this.streaming) {
+      let sensorSettingPromiseRSLV;
+      const sensorSettingPromise = new Promise((rslv, rjct) => {
+        sensorSettingPromiseRSLV = rslv;
+      });
+      const PMDSensorSettingHandle = (event) => {
+        const val = event?.target?.value;
+        sensorSettingPromiseRSLV(this.parseSensorSettings(val));
+      };
+      this.PMDCtrlChar?.addEventListener(
+        "characteristicvaluechanged",
+        PMDSensorSettingHandle,
+        { once: true }
+      );
+      const cmd_buf = new Uint8Array([
+        1,
+        sensorId
+      ]);
+      await this.PMDCtrlChar?.writeValue(cmd_buf);
+      return await sensorSettingPromise;
+    }
+  }
+  PMDDataHandle(event) {
+    const val = event.target.value;
+    const dataTimeStamp = val.getBigUint64(1, true);
+    if (this.timeOffset === BigInt(0)) {
+      this.timeOffset = dataTimeStamp;
+      this.eventTimeOffset = event.timeStamp + performance.timeOrigin;
+    }
+    const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
+    const type = val.getUint8(0);
+    const frame_type = val.getUint8(9);
+    const dataFrame = {
+      type: PolarSensorType[type],
+      sample_timestamp_ms: offset_timestamp,
+      prev_sample_timestamp_ms: 0,
+      recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
+      event_time_offset_ms: this.eventTimeOffset
+    };
+    switch (type) {
+      case 2:
+        if (frame_type == 1) {
+          dataFrame.samples = new Int16Array(val.buffer.slice(10));
+          dataFrame.prev_sample_timestamp_ms = this.lastACCTimestamp;
+          this.lastACCTimestamp = offset_timestamp;
+        }
+        break;
+      case 0:
+        if (frame_type === 0) {
+          const numFrames = Math.floor((val.byteLength - 10) / 3);
+          dataFrame.samples = new Int32Array(numFrames);
+          for (let i = 10; i < val.byteLength; i += 3) {
+            let d = val.getUint8(i + 2) << 16 | val.getUint8(i + 1) << 8 | val.getUint8(i);
+            if (d & 8388608) {
+              d |= 4278190080;
+            }
+            dataFrame.samples[Math.floor((i - 10) / 3)] = d;
+          }
+          dataFrame.prev_sample_timestamp_ms = this.lastECGTimestamp;
+          this.lastECGTimestamp = offset_timestamp;
+        }
+        break;
+    }
+    for (const handler of this.dataHandle[PolarSensorType[type]]) {
+      handler(dataFrame);
+    }
+  }
+  parseCtrlReply(val) {
+    if (val.getUint8(0) === 240) {
+      const polar_cmd = val.getUint8(1);
+      if (polar_cmd === 2 || polar_cmd === 3) {
+        const startReply = {
+          type: PolarPMDCommand[polar_cmd],
+          sensor: PolarSensorType[val.getUint8(2)],
+          error: ERROR_MSGS[val.getUint8(3)],
+          more_frames: val.getUint8(4)
+        };
+        if (val.byteLength > 5) {
+          startReply.reserved = val.getUint8(5);
+        }
+        return startReply;
+      }
+    }
+  }
+  async startACC(rangeG = 4, sample_rate = 100, resolution = 16) {
+    if (this.ACCStarted) {
+      return;
+    }
+    let startACCRSLV;
+    const startACCPromise = new Promise(
+      (rslv, rjct) => {
+        startACCRSLV = rslv;
+      }
+    );
+    const PMDSensorSettingHandle = (event) => {
+      this.log("PMDSensorSettingHandle");
+      const val = event?.target?.value;
+      startACCRSLV(this.parseCtrlReply(val));
+    };
+    this.PMDCtrlChar?.addEventListener(
+      "characteristicvaluechanged",
+      PMDSensorSettingHandle,
+      { once: true }
+    );
+    const cmd_buf = new Uint8Array(14);
+    const cmd_buf_dataview = new DataView(cmd_buf.buffer);
+    cmd_buf[0] = 2;
+    cmd_buf[1] = 2;
+    cmd_buf[2] = 2;
+    cmd_buf[3] = 1;
+    cmd_buf_dataview.setUint16(4, rangeG, true);
+    cmd_buf[6] = 0;
+    cmd_buf[7] = 1;
+    cmd_buf_dataview.setUint16(8, sample_rate, true);
+    cmd_buf[10] = 1;
+    cmd_buf[11] = 1;
+    cmd_buf_dataview.setUint16(12, resolution, true);
+    await this.PMDCtrlChar?.writeValue(cmd_buf);
+    const startReply = await startACCPromise;
+    if (startReply?.error === ERROR_MSGS[0]) {
+      this.ACCStarted = true;
+    }
+    return startReply;
+  }
+  async startECG(sample_rate = 130, resolution = 14) {
+    if (this.ECGStarted) {
+      return;
+    }
+    let startECGRSLV;
+    const startECGPromise = new Promise(
+      (rslv, rjct) => {
+        startECGRSLV = rslv;
+      }
+    );
+    const PMDSensorSettingHandle = (event) => {
+      this.log("PMDSensorSettingHandle");
+      const val = event?.target?.value;
+      startECGRSLV(this.parseCtrlReply(val));
+    };
+    this.PMDCtrlChar?.addEventListener(
+      "characteristicvaluechanged",
+      PMDSensorSettingHandle,
+      { once: true }
+    );
+    const cmd_buf = new Uint8Array(10);
+    const cmd_buf_dataview = new DataView(cmd_buf.buffer);
+    cmd_buf[0] = 2;
+    cmd_buf[1] = 0;
+    cmd_buf[2] = 1;
+    cmd_buf[3] = 1;
+    cmd_buf_dataview.setUint16(4, resolution, true);
+    cmd_buf[6] = 0;
+    cmd_buf[7] = 1;
+    cmd_buf_dataview.setUint16(8, sample_rate, true);
+    await this.PMDCtrlChar?.writeValue(cmd_buf);
+    const startReply = await startECGPromise;
+    if (startReply?.error === ERROR_MSGS[0]) {
+      this.ECGStarted = true;
+    }
+    return startReply;
+  }
+  async stopECG() {
+    if (!this.ECGStarted) {
+      return;
+    }
+    const endReply = await this.stopSensor(
+      0
+      /* ECG */
+    );
+    if (endReply?.error === ERROR_MSGS[0]) {
+      this.ECGStarted = false;
+    }
+    return endReply;
+  }
+  async stopACC() {
+    if (!this.ACCStarted) {
+      return;
+    }
+    const endReply = await this.stopSensor(
+      2
+      /* ACC */
+    );
+    if (endReply?.error === ERROR_MSGS[0]) {
+      this.ACCStarted = false;
+    }
+    return endReply;
+  }
+  async stopSensor(sensorType) {
+    let endSensorRSLV;
+    const endACCPromise = new Promise(
+      (rslv, rjct) => {
+        endSensorRSLV = rslv;
+      }
+    );
+    const PMDSensorSettingHandle = (event) => {
+      const val = event?.target?.value;
+      endSensorRSLV(this.parseCtrlReply(val));
+    };
+    this.PMDCtrlChar?.addEventListener(
+      "characteristicvaluechanged",
+      PMDSensorSettingHandle,
+      { once: true }
+    );
+    const cmd_buf = new Uint8Array(2);
+    cmd_buf[0] = 3;
+    cmd_buf[1] = sensorType;
+    await this.PMDCtrlChar?.writeValue(cmd_buf);
+    return await endACCPromise;
+  }
+};
+
+// src/consts.ts
+var BODY_PARTS = [
+  "",
+  "LShoulder",
+  "RShoulder",
+  "Chest",
+  "MiddleSpine",
+  "LowerSpine",
+  "Hip",
+  "LThigh",
+  "RThigh"
+];
+var date2000 = /* @__PURE__ */ new Date("2000-01-01T00:00:00Z");
+var date2018 = /* @__PURE__ */ new Date("2018-01-01T00:00:00Z");
+var EPOCH2000_OFFSET_MS = date2000.valueOf();
+var EPOCH2000_OFFSET_NS = BigInt(EPOCH2000_OFFSET_MS) * BigInt(1e6);
+var EPOCH2018_OFFSET_MS = date2018.valueOf();
+var EPOCH2018_OFFSET_NS = BigInt(EPOCH2018_OFFSET_MS) * BigInt(1e6);
+var EXTRA_OFFSET_NS = EPOCH2018_OFFSET_NS - EPOCH2000_OFFSET_NS;
+var EXTRA_OFFSET_MS_WHOLE = EXTRA_OFFSET_NS / BigInt(1e6);
+var EXTRA_OFFSET_MS_DECIMAL = Number(EXTRA_OFFSET_NS - EXTRA_OFFSET_MS_WHOLE * BigInt(1e6)) / 1e6;
+var EXTRA_OFFSET_MS = EXTRA_OFFSET_MS_DECIMAL + Number(EXTRA_OFFSET_MS_DECIMAL);
 var LOW_BATT_LVL = 40;
 var EXG_STREAM_DELAY_MS = 600;
 var EXG_RMS_WINDOW_MS = 200;
@@ -1526,362 +1872,33 @@ var THETA_AXIS_PRESENTATION_OPTIONS = {
   interpolation: "linear",
   strokeStyle: "#ffff78cc"
 };
-
-// src/PolarH10.ts
-var PolarH10 = class {
-  device;
-  server = void 0;
-  PMDService = void 0;
-  PMDCtrlChar = void 0;
-  PMDDataChar = void 0;
-  BattService = void 0;
-  BattLvlChar = void 0;
-  streaming = false;
-  verbose = true;
-  dataHandle = {};
-  timeOffset = BigInt(0);
-  eventTimeOffset;
-  lastECGTimestamp;
-  lastACCTimestamp;
-  ACCStarted = false;
-  ECGStarted = false;
-  constructor(device, verbose = true) {
-    this.device = device;
-    this.verbose = verbose;
-    this.lastECGTimestamp = 0;
-    this.lastACCTimestamp = 0;
-    this.ACCStarted = false;
-    this.ECGStarted = false;
-    for (let i = 0; i < PolarSensorNames.length; i++) {
-      this.dataHandle[PolarSensorNames[i]] = [];
-    }
-  }
-  addEventListener(type, handler) {
-    if (!this.dataHandle[type].includes(handler)) {
-      this.dataHandle[type].push(handler);
-    }
-  }
-  removeEventListener(type, handler) {
-    let index = this.dataHandle[type].indexOf(handler);
-    if (index > -1) {
-      this.dataHandle[type].splice(index, 1);
-    }
-    return index;
-  }
-  clearEventListner(type) {
-    delete this.dataHandle[type];
-    this.dataHandle[type] = [];
-  }
-  log(...o) {
-    if (this.verbose) {
-      console.log(...o);
-    }
-  }
-  async init() {
-    this.server = await this.device.gatt?.connect();
-    this.log(`Connecting to ${this.device.name} GATT server...`);
-    this.PMDService = await this.server?.getPrimaryService(PMD_SERVICE_ID);
-    this.log(`  Got PMD Service`);
-    this.PMDCtrlChar = await this.PMDService?.getCharacteristic(PMD_CTRL_CHAR);
-    this.log(`    Got PMD control characteristic`);
-    await this.PMDCtrlChar?.startNotifications();
-    this.log(`    Start notification`);
-    this.PMDDataChar = await this.PMDService?.getCharacteristic(PMD_DATA_CHAR);
-    this.log(`    Got PMD data characteristic`);
-    await this.PMDDataChar?.startNotifications();
-    this.log(`    Start notification`);
-    this.streaming = false;
-    this.BattService = await this.server?.getPrimaryService("battery_service");
-    this.log(`  Got battery Service`);
-    this.BattLvlChar = await this.BattService?.getCharacteristic("battery_level");
-    this.log(`    Got battery level characteristic`);
-    this.PMDDataChar?.addEventListener(
-      "characteristicvaluechanged",
-      this.PMDDataHandle.bind(this)
-    );
-  }
-  PMDCtrlCharHandle(event) {
-    this.log(event);
-  }
-  PMDCtrlDataHandle(event) {
-    this.log(event);
-  }
-  async getBatteryLevel() {
-    let battRead = await this.BattLvlChar?.readValue();
-    if (battRead) {
-      return battRead.getUint8(0);
-    } else {
-      return 0;
-    }
-  }
-  async getPMDFeatures() {
-    const PMEFeatures = await this.PMDCtrlChar?.readValue();
-    const featureList = [];
-    if (PMEFeatures !== void 0) {
-      if (PMEFeatures.byteLength === 17) {
-        if (PMEFeatures.getUint8(0) === 15) {
-          const feature_num = PMEFeatures.getUint8(1);
-          for (let i = 0; i < PolarSensorNames.length; i++) {
-            const sensor_name = PolarSensorNames[i];
-            if (feature_num >> PolarSensorType[sensor_name] & 1) {
-              featureList.push(sensor_name);
-            }
-          }
-        }
-      }
-    }
-    return featureList;
-  }
-  async getSensorSettingsFromName(sensorName) {
-    return this.getSensorSettingsFromId(PolarSensorType[sensorName]);
-  }
-  parseSensorSettings(val) {
-    if (val.getUint8(0) == 240 && val.getUint8(1) == 1 /* GET_MEASUREMENT_SETTINGS */) {
-      const info = {
-        type: PolarSensorType[val.getUint8(2)],
-        error: ERROR_MSGS[val.getUint8(3)],
-        more_frames: val.getUint8(4),
-        settings: {}
-      };
-      let i = 5;
-      while (i < val.byteLength) {
-        const setting_type = val.getUint8(i);
-        i += 1;
-        const arr_len = val.getUint8(i);
-        i += 1;
-        const setting_name = PolarSettingType[setting_type];
-        info.settings[setting_name] = [];
-        for (let arr_i = 0; arr_i < arr_len; arr_i++) {
-          info.settings[setting_name].push(
-            setting_parsers[setting_name](val, i)
-          );
-          i += setting_parser_offsets[setting_name];
-        }
-      }
-      return info;
-    }
-  }
-  async getSensorSettingsFromId(sensorId) {
-    if (!this.streaming) {
-      let sensorSettingPromiseRSLV;
-      const sensorSettingPromise = new Promise((rslv, rjct) => {
-        sensorSettingPromiseRSLV = rslv;
-      });
-      const PMDSensorSettingHandle = (event) => {
-        const val = event?.target?.value;
-        sensorSettingPromiseRSLV(this.parseSensorSettings(val));
-      };
-      this.PMDCtrlChar?.addEventListener(
-        "characteristicvaluechanged",
-        PMDSensorSettingHandle,
-        { once: true }
-      );
-      const cmd_buf = new Uint8Array([
-        1 /* GET_MEASUREMENT_SETTINGS */,
-        sensorId
-      ]);
-      await this.PMDCtrlChar?.writeValue(cmd_buf);
-      return await sensorSettingPromise;
-    }
-  }
-  PMDDataHandle(event) {
-    const val = event.target.value;
-    const dataTimeStamp = val.getBigUint64(1, true);
-    if (this.timeOffset === BigInt(0)) {
-      this.timeOffset = dataTimeStamp;
-      this.eventTimeOffset = event.timeStamp + performance.timeOrigin;
-    }
-    const offset_timestamp = Number(dataTimeStamp - this.timeOffset) / 1e6;
-    const type = val.getUint8(0);
-    const frame_type = val.getUint8(9);
-    const dataFrame = {
-      type: PolarSensorType[type],
-      sample_timestamp_ms: offset_timestamp,
-      prev_sample_timestamp_ms: 0,
-      recv_epoch_time_ms: event.timeStamp + performance.timeOrigin,
-      event_time_offset_ms: this.eventTimeOffset
-    };
-    switch (type) {
-      case 2 /* ACC */:
-        if (frame_type == 1) {
-          dataFrame.samples = new Int16Array(val.buffer.slice(10));
-          dataFrame.prev_sample_timestamp_ms = this.lastACCTimestamp;
-          this.lastACCTimestamp = offset_timestamp;
-        }
-        break;
-      case 0 /* ECG */:
-        if (frame_type === 0) {
-          const numFrames = Math.floor((val.byteLength - 10) / 3);
-          dataFrame.samples = new Int32Array(numFrames);
-          for (let i = 10; i < val.byteLength; i += 3) {
-            let d = val.getUint8(i + 2) << 16 | val.getUint8(i + 1) << 8 | val.getUint8(i);
-            if (d & 8388608) {
-              d |= 4278190080;
-            }
-            dataFrame.samples[Math.floor((i - 10) / 3)] = d;
-          }
-          dataFrame.prev_sample_timestamp_ms = this.lastECGTimestamp;
-          this.lastECGTimestamp = offset_timestamp;
-        }
-        break;
-    }
-    for (const handler of this.dataHandle[PolarSensorType[type]]) {
-      handler(dataFrame);
-    }
-  }
-  parseCtrlReply(val) {
-    if (val.getUint8(0) === 240) {
-      const polar_cmd = val.getUint8(1);
-      if (polar_cmd === 2 /* REQUEST_MEASUREMENT_START */ || polar_cmd === 3 /* REQUEST_MEASUREMENT_STOP */) {
-        const startReply = {
-          type: PolarPMDCommand[polar_cmd],
-          sensor: PolarSensorType[val.getUint8(2)],
-          error: ERROR_MSGS[val.getUint8(3)],
-          more_frames: val.getUint8(4)
-        };
-        if (val.byteLength > 5) {
-          startReply.reserved = val.getUint8(5);
-        }
-        return startReply;
-      }
-    }
-  }
-  async startACC(rangeG = 4, sample_rate = 100, resolution = 16) {
-    if (this.ACCStarted) {
-      return;
-    }
-    let startACCRSLV;
-    const startACCPromise = new Promise(
-      (rslv, rjct) => {
-        startACCRSLV = rslv;
-      }
-    );
-    const PMDSensorSettingHandle = (event) => {
-      this.log("PMDSensorSettingHandle");
-      const val = event?.target?.value;
-      startACCRSLV(this.parseCtrlReply(val));
-    };
-    this.PMDCtrlChar?.addEventListener(
-      "characteristicvaluechanged",
-      PMDSensorSettingHandle,
-      { once: true }
-    );
-    const cmd_buf = new Uint8Array(14);
-    const cmd_buf_dataview = new DataView(cmd_buf.buffer);
-    cmd_buf[0] = 2 /* REQUEST_MEASUREMENT_START */;
-    cmd_buf[1] = 2 /* ACC */;
-    cmd_buf[2] = 2 /* RANGE_PN_UNIT */;
-    cmd_buf[3] = 1;
-    cmd_buf_dataview.setUint16(4, rangeG, true);
-    cmd_buf[6] = 0 /* SAMPLE_RATE */;
-    cmd_buf[7] = 1;
-    cmd_buf_dataview.setUint16(8, sample_rate, true);
-    cmd_buf[10] = 1 /* RESOLUTION */;
-    cmd_buf[11] = 1;
-    cmd_buf_dataview.setUint16(12, resolution, true);
-    await this.PMDCtrlChar?.writeValue(cmd_buf);
-    const startReply = await startACCPromise;
-    if (startReply?.error === ERROR_MSGS[0]) {
-      this.ACCStarted = true;
-    }
-    return startReply;
-  }
-  async startECG(sample_rate = 130, resolution = 14) {
-    if (this.ECGStarted) {
-      return;
-    }
-    let startECGRSLV;
-    const startECGPromise = new Promise(
-      (rslv, rjct) => {
-        startECGRSLV = rslv;
-      }
-    );
-    const PMDSensorSettingHandle = (event) => {
-      this.log("PMDSensorSettingHandle");
-      const val = event?.target?.value;
-      startECGRSLV(this.parseCtrlReply(val));
-    };
-    this.PMDCtrlChar?.addEventListener(
-      "characteristicvaluechanged",
-      PMDSensorSettingHandle,
-      { once: true }
-    );
-    const cmd_buf = new Uint8Array(10);
-    const cmd_buf_dataview = new DataView(cmd_buf.buffer);
-    cmd_buf[0] = 2 /* REQUEST_MEASUREMENT_START */;
-    cmd_buf[1] = 0 /* ECG */;
-    cmd_buf[2] = 1 /* RESOLUTION */;
-    cmd_buf[3] = 1;
-    cmd_buf_dataview.setUint16(4, resolution, true);
-    cmd_buf[6] = 0 /* SAMPLE_RATE */;
-    cmd_buf[7] = 1;
-    cmd_buf_dataview.setUint16(8, sample_rate, true);
-    await this.PMDCtrlChar?.writeValue(cmd_buf);
-    const startReply = await startECGPromise;
-    if (startReply?.error === ERROR_MSGS[0]) {
-      this.ECGStarted = true;
-    }
-    return startReply;
-  }
-  async stopECG() {
-    if (!this.ECGStarted) {
-      return;
-    }
-    const endReply = await this.stopSensor(
-      0 /* ECG */
-    );
-    if (endReply?.error === ERROR_MSGS[0]) {
-      this.ECGStarted = false;
-    }
-    return endReply;
-  }
-  async stopACC() {
-    if (!this.ACCStarted) {
-      return;
-    }
-    const endReply = await this.stopSensor(
-      2 /* ACC */
-    );
-    if (endReply?.error === ERROR_MSGS[0]) {
-      this.ACCStarted = false;
-    }
-    return endReply;
-  }
-  async stopSensor(sensorType) {
-    let endSensorRSLV;
-    const endACCPromise = new Promise(
-      (rslv, rjct) => {
-        endSensorRSLV = rslv;
-      }
-    );
-    const PMDSensorSettingHandle = (event) => {
-      const val = event?.target?.value;
-      endSensorRSLV(this.parseCtrlReply(val));
-    };
-    this.PMDCtrlChar?.addEventListener(
-      "characteristicvaluechanged",
-      PMDSensorSettingHandle,
-      { once: true }
-    );
-    const cmd_buf = new Uint8Array(2);
-    cmd_buf[0] = 3 /* REQUEST_MEASUREMENT_STOP */;
-    cmd_buf[1] = sensorType;
-    await this.PMDCtrlChar?.writeValue(cmd_buf);
-    return await endACCPromise;
-  }
-};
+var PolarSensorType2 = /* @__PURE__ */ ((PolarSensorType3) => {
+  PolarSensorType3[PolarSensorType3["ECG"] = 0] = "ECG";
+  PolarSensorType3[PolarSensorType3["PPG"] = 1] = "PPG";
+  PolarSensorType3[PolarSensorType3["ACC"] = 2] = "ACC";
+  PolarSensorType3[PolarSensorType3["PPI"] = 3] = "PPI";
+  PolarSensorType3[PolarSensorType3["GYRO"] = 5] = "GYRO";
+  PolarSensorType3[PolarSensorType3["MAGNETOMETER"] = 6] = "MAGNETOMETER";
+  PolarSensorType3[PolarSensorType3["SDK_MODE"] = 9] = "SDK_MODE";
+  PolarSensorType3[PolarSensorType3["LOCATION"] = 10] = "LOCATION";
+  PolarSensorType3[PolarSensorType3["PRESSURE"] = 11] = "PRESSURE";
+  PolarSensorType3[PolarSensorType3["TEMPERATURE"] = 12] = "TEMPERATURE";
+  return PolarSensorType3;
+})(PolarSensorType2 || {});
+var PolarSensorNames2 = Object.keys(PolarSensorType2).filter(
+  (t) => isNaN(Number(t))
+);
 
 // src/PolarH10VisualizerRow.ts
 var IIRCalc = new import_fili.CalcCascades();
 var DPR = window.devicePixelRatio;
-var PolarVisRows = [];
 async function createPolarVisRow(content2, device) {
   const row = new PolarVisRow(content2, device);
   await row.init();
-  PolarVisRows.push(row);
 }
 var PolarVisRow = class _PolarVisRow {
   static polarRowID = 0;
+  static PolarVisRows = [];
   device;
   polarH10;
   deviceName;
@@ -1889,6 +1906,7 @@ var PolarVisRow = class _PolarVisRow {
   parent;
   polarSensorDiv;
   optionDiv;
+  deviceInfoDiv;
   nameDiv;
   loadingDiv;
   disconnectDiv;
@@ -1897,15 +1915,19 @@ var PolarVisRow = class _PolarVisRow {
   bodypartSelectDiv;
   bodypartSelect;
   dataCtrl;
+  rowOrder;
   visContainerDiv;
   EXGCtrlDiv;
   ACCCtrlDiv;
+  order;
   EXG_HP_MIN = EXG_HP_MIN;
   EXG_HP_MAX = EXG_HP_MAX;
   EXG_RMS_MIN = EXG_RMS_MIN;
   EXG_RMS_MAX = EXG_RMS_MAX;
   ACC_MIN = ACC_MIN;
   ACC_MAX = ACC_MAX;
+  orderUpBtn;
+  orderDownBtn;
   EXGFormSelect;
   EXGSwitchInput;
   EXGDropDown;
@@ -1964,6 +1986,29 @@ var PolarVisRow = class _PolarVisRow {
       alert(err);
     }
     _PolarVisRow.polarRowID += 1;
+    _PolarVisRow.PolarVisRows.push(this);
+  }
+  removeSelf() {
+    const myInd = _PolarVisRow.PolarVisRows.indexOf(this);
+    if (myInd > -1) {
+      if (this.parent.contains(this.polarSensorDiv)) {
+        this.parent.removeChild(this.polarSensorDiv);
+      }
+      _PolarVisRow.PolarVisRows.splice(myInd, 1);
+      if (myInd === _PolarVisRow.PolarVisRows.length) {
+        _PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
+      } else if (myInd === 0 && _PolarVisRow.PolarVisRows.length) {
+        _PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+      }
+      _PolarVisRow.reOrderRows();
+    }
+  }
+  static reOrderRows() {
+    for (let i = 0; i < _PolarVisRow.PolarVisRows.length; i++) {
+      const row = _PolarVisRow.PolarVisRows[i];
+      row.order = i;
+      row.polarSensorDiv.style.order = i.toString();
+    }
   }
   async initPolarH10() {
     this.polarSensorDiv = createDiv(`polarSensorDiv`, this.parent, [
@@ -1974,6 +2019,8 @@ var PolarVisRow = class _PolarVisRow {
       "polar-sensor-left-panel",
       "center"
     ]);
+    this.order = _PolarVisRow.PolarVisRows.length;
+    this.polarSensorDiv.style.order = this.order.toString();
     this.nameDiv = createDiv(
       `device-name-batt`,
       this.optionDiv,
@@ -1992,17 +2039,13 @@ var PolarVisRow = class _PolarVisRow {
     } catch (err) {
       console.log(err);
       alert(err);
-      if (this.parent.contains(this.polarSensorDiv)) {
-        this.parent.removeChild(this.polarSensorDiv);
-      }
+      this.removeSelf();
       throw new Error("polarH10 device initialization failed!");
     }
   }
   async disconnectPolarH10(ev = void 0) {
     this.device.gatt?.disconnect();
-    if (this.parent.contains(this.polarSensorDiv)) {
-      this.parent.removeChild(this.polarSensorDiv);
-    }
+    this.removeSelf();
     if (this.ecg_chart !== void 0) {
       this.ecg_chart.stop();
     }
@@ -2059,6 +2102,9 @@ var PolarVisRow = class _PolarVisRow {
     this.acc_theta_ts = void 0;
   }
   async initDeviceInfo() {
+    this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
+      "device-info"
+    ]);
     this.disconnectDiv = createDiv("disconnectDiv", void 0, [
       "flexbox",
       "disconnect"
@@ -2077,7 +2123,7 @@ var PolarVisRow = class _PolarVisRow {
       "tooltip-top"
     );
     this.disconnectDiv.appendChild(disBtn);
-    disBtn.addEventListener("click", this.disconnectPolarH10.bind(this));
+    disBtn.onclick = this.disconnectPolarH10.bind(this);
     this.battLvl = await this.polarH10.getBatteryLevel();
     this.optionDiv.removeChild(this.loadingDiv);
     this.optionDiv.removeChild(this.nameDiv);
@@ -2099,21 +2145,52 @@ var PolarVisRow = class _PolarVisRow {
     battLvlDiv.classList.add("flexbox");
     this.nameDiv.appendChild(battLvlDiv);
     this.nameDiv.classList.add("flexbox");
-    this.optionDiv.appendChild(this.disconnectDiv);
-    this.optionDiv.appendChild(this.nameDiv);
-    this.dataInfo = createDiv("dataInfo", this.optionDiv, [
-      "left",
-      "full-width",
-      "flexbox"
-    ]);
+    this.deviceInfoDiv.appendChild(this.disconnectDiv);
+    this.deviceInfoDiv.appendChild(this.nameDiv);
+    this.optionDiv.appendChild(this.deviceInfoDiv);
+    this.dataInfo = createDiv("dataInfo", this.deviceInfoDiv, ["data-info"]);
+    this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
+    this.orderUpBtn = document.createElement("button");
+    const orderUpIcon = document.createElement("i");
+    orderUpIcon.classList.add("icon", "icon-arrow-up");
+    this.orderUpBtn.appendChild(orderUpIcon);
+    this.orderUpBtn.setAttribute("data-tooltip", "Move up");
+    this.orderUpBtn.classList.add(
+      "btn",
+      "btn-primary",
+      "btn-sm",
+      "tooltip",
+      "tooltip-right"
+    );
+    this.rowOrder.appendChild(this.orderUpBtn);
+    this.orderUpBtn.disabled = _PolarVisRow.PolarVisRows.length < 1;
+    this.orderUpBtn.onclick = this.moveUp.bind(this);
+    this.orderDownBtn = document.createElement("button");
+    const orderDownIcon = document.createElement("i");
+    orderDownIcon.classList.add("icon", "icon-arrow-down");
+    this.orderDownBtn.appendChild(orderDownIcon);
+    this.orderDownBtn.setAttribute("data-tooltip", "Move down");
+    this.orderDownBtn.classList.add(
+      "btn",
+      "btn-primary",
+      "btn-sm",
+      "tooltip",
+      "tooltip-right"
+    );
+    this.rowOrder.appendChild(this.orderDownBtn);
+    this.orderDownBtn.disabled = true;
+    if (_PolarVisRow.PolarVisRows.length > 0) {
+      _PolarVisRow.PolarVisRows[_PolarVisRow.PolarVisRows.length - 1].orderDownBtn.disabled = false;
+    }
+    this.orderDownBtn.onclick = this.moveDown.bind(this);
     this.bodypartLabel = createDiv(
       "bodypartLabel",
       this.dataInfo,
-      ["half-width", "center"],
+      ["bodypart-text"],
       "Bodypart:"
     );
     this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
-      "half-width"
+      "bodypart-select"
     ]);
     this.bodypartSelect = createSelect(
       "bodypartSelect",
@@ -2123,14 +2200,9 @@ var PolarVisRow = class _PolarVisRow {
       BODY_PARTS,
       getPolarRowId
     );
-    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, [
-      "left",
-      "full-width",
-      "flexbox"
-    ]);
+    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, ["data-ctrl"]);
     this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
-      "full-width",
-      "full-height"
+      "full-width-height"
     ]);
   }
   async initDeviceGraphCtrl() {
@@ -2168,6 +2240,40 @@ var PolarVisRow = class _PolarVisRow {
     this.ACCFormSelect.selectedIndex = 0;
     this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
     this.ACCFormSelect.disabled = true;
+  }
+  moveUp(ev) {
+    this.order -= 1;
+    this.polarSensorDiv.style.order = this.order.toString();
+    const prevRow = _PolarVisRow.PolarVisRows[this.order];
+    prevRow.order += 1;
+    prevRow.polarSensorDiv.style.order = prevRow.order.toString();
+    _PolarVisRow.PolarVisRows[this.order] = this;
+    _PolarVisRow.PolarVisRows[prevRow.order] = prevRow;
+    if (this.order === 0) {
+      _PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = true;
+      _PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = false;
+    }
+    if (prevRow.order === _PolarVisRow.PolarVisRows.length - 1) {
+      _PolarVisRow.PolarVisRows[prevRow.order].orderDownBtn.disabled = true;
+      _PolarVisRow.PolarVisRows[prevRow.order].orderUpBtn.disabled = false;
+    }
+  }
+  moveDown(ev) {
+    this.order += 1;
+    this.polarSensorDiv.style.order = this.order.toString();
+    const nextRow = _PolarVisRow.PolarVisRows[this.order];
+    nextRow.order -= 1;
+    nextRow.polarSensorDiv.style.order = nextRow.order.toString();
+    _PolarVisRow.PolarVisRows[this.order] = this;
+    _PolarVisRow.PolarVisRows[nextRow.order] = nextRow;
+    if (this.order === _PolarVisRow.PolarVisRows.length - 1) {
+      _PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = false;
+      _PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = true;
+    }
+    if (nextRow.order === 0) {
+      _PolarVisRow.PolarVisRows[nextRow.order].orderDownBtn.disabled = false;
+      _PolarVisRow.PolarVisRows[nextRow.order].orderUpBtn.disabled = true;
+    }
   }
   async onToggleECG(ev) {
     this.ACCSwitchInput.disabled = true;
