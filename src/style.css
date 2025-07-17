@@ -125,8 +125,7 @@ div.disconnect {
 
 div.polar-sensor-row {
   height: 12.5%;
-  /*margin-right: 25px;*/
-  /*flex-grow: 1;*/
+  min-height: 112px;
 }
 div.float-left {
   float: left;
