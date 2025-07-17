@@ -43,7 +43,7 @@ import {
 const IIRCalc = new CalcCascades();
 const DPR = window.devicePixelRatio;
 
-export const PolarVisRows: PolarVisRow[] = [];
+// export const PolarVisRows: PolarVisRow[] = [];
 
 export async function createPolarVisRow(
   content: HTMLElement,
@@ -51,11 +51,11 @@ export async function createPolarVisRow(
 ) {
   const row = new PolarVisRow(content, device);
   await row.init();
-  PolarVisRows.push(row);
 }
 
 class PolarVisRow {
   static polarRowID: number = 0;
+  static PolarVisRows: PolarVisRow[] = [];
   device: BluetoothDevice;
   polarH10: PolarH10;
   deviceName: string;
@@ -63,6 +63,7 @@ class PolarVisRow {
   parent: HTMLElement;
   polarSensorDiv: HTMLDivElement;
   optionDiv: HTMLDivElement;
+  deviceInfoDiv: HTMLDivElement;
   nameDiv: HTMLDivElement;
   loadingDiv: HTMLDivElement;
   disconnectDiv: HTMLDivElement;
@@ -71,9 +72,11 @@ class PolarVisRow {
   bodypartSelectDiv: HTMLDivElement;
   bodypartSelect: HTMLSelectElement;
   dataCtrl: HTMLDivElement;
+  rowOrder: HTMLDivElement;
   visContainerDiv: HTMLDivElement;
   EXGCtrlDiv: HTMLDivElement;
   ACCCtrlDiv: HTMLDivElement;
+  order: number;
 
   EXG_HP_MIN: number = EXG_HP_MIN;
   EXG_HP_MAX: number = EXG_HP_MAX;
@@ -82,6 +85,8 @@ class PolarVisRow {
   ACC_MIN: number = ACC_MIN;
   ACC_MAX: number = ACC_MAX;
 
+  orderUpBtn: HTMLButtonElement;
+  orderDownBtn: HTMLButtonElement;
   EXGFormSelect: HTMLSelectElement;
   EXGSwitchInput: HTMLInputElement;
   EXGDropDown: HTMLDivElement;
@@ -145,8 +150,34 @@ class PolarVisRow {
       this.disconnectPolarH10();
       alert(err);
     }
-
     PolarVisRow.polarRowID += 1;
+    PolarVisRow.PolarVisRows.push(this);
+  }
+
+  private removeSelf() {
+    const myInd = PolarVisRow.PolarVisRows.indexOf(this);
+    if (myInd > -1) {
+      if (this.parent.contains(this.polarSensorDiv)) {
+        this.parent.removeChild(this.polarSensorDiv);
+      }
+      PolarVisRow.PolarVisRows.splice(myInd, 1);
+
+      if (myInd === PolarVisRow.PolarVisRows.length) {
+        PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
+      } else if (myInd === 0 && PolarVisRow.PolarVisRows.length) {
+        PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+      }
+
+      PolarVisRow.reOrderRows();
+    }
+  }
+  private static reOrderRows() {
+    for (let i = 0; i < PolarVisRow.PolarVisRows.length; i++) {
+      const row = PolarVisRow.PolarVisRows[i];
+      row.order = i;
+      row.polarSensorDiv.style.order = i.toString();
+      // row.polarSensorDiv.setAttribute("order", i.toString());
+    }
   }
 
   private async initPolarH10() {
@@ -158,6 +189,9 @@ class PolarVisRow {
       "polar-sensor-left-panel",
       "center",
     ]);
+    this.order = PolarVisRow.PolarVisRows.length;
+    // this.polarSensorDiv.setAttribute("order", this.order.toString());
+    this.polarSensorDiv.style.order = this.order.toString();
 
     this.nameDiv = createDiv(
       `device-name-batt`,
@@ -178,18 +212,17 @@ class PolarVisRow {
     } catch (err) {
       console.log(err);
       alert(err);
-      if (this.parent.contains(this.polarSensorDiv)) {
-        this.parent.removeChild(this.polarSensorDiv);
-      }
+      this.removeSelf();
       throw new Error("polarH10 device initialization failed!");
     }
   }
 
   async disconnectPolarH10(ev: any = undefined) {
     this.device.gatt?.disconnect();
-    if (this.parent.contains(this.polarSensorDiv)) {
-      this.parent.removeChild(this.polarSensorDiv);
-    }
+    // if (this.parent.contains(this.polarSensorDiv)) {
+    //   this.parent.removeChild(this.polarSensorDiv);
+    // }
+    this.removeSelf();
     if (this.ecg_chart !== undefined) {
       this.ecg_chart.stop();
     }
@@ -250,6 +283,10 @@ class PolarVisRow {
   }
 
   private async initDeviceInfo() {
+    this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
+      "device-info",
+    ]);
+
     this.disconnectDiv = createDiv("disconnectDiv", undefined, [
       "flexbox",
       "disconnect",
@@ -270,7 +307,8 @@ class PolarVisRow {
       "tooltip-top",
     );
     this.disconnectDiv.appendChild(disBtn);
-    disBtn.addEventListener("click", this.disconnectPolarH10.bind(this));
+    disBtn.onclick = this.disconnectPolarH10.bind(this);
+    // disBtn.addEventListener("click", this.disconnectPolarH10.bind(this));
 
     this.battLvl = await this.polarH10.getBatteryLevel();
     this.optionDiv.removeChild(this.loadingDiv);
@@ -294,24 +332,64 @@ class PolarVisRow {
     battLvlDiv.classList.add("flexbox");
     this.nameDiv.appendChild(battLvlDiv);
     this.nameDiv.classList.add("flexbox");
-    this.optionDiv.appendChild(this.disconnectDiv);
-    this.optionDiv.appendChild(this.nameDiv);
+    this.deviceInfoDiv.appendChild(this.disconnectDiv);
+    this.deviceInfoDiv.appendChild(this.nameDiv);
+    this.optionDiv.appendChild(this.deviceInfoDiv);
+    // this.optionDiv.appendChild(this.nameDiv);
 
-    this.dataInfo = createDiv("dataInfo", this.optionDiv, [
-      "left",
-      "full-width",
-      "flexbox",
-    ]);
+    this.dataInfo = createDiv("dataInfo", this.deviceInfoDiv, ["data-info"]);
+
+    this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
+
+    this.orderUpBtn = document.createElement("button");
+    const orderUpIcon = document.createElement("i");
+    orderUpIcon.classList.add("icon", "icon-arrow-up");
+    this.orderUpBtn.appendChild(orderUpIcon);
+
+    this.orderUpBtn.setAttribute("data-tooltip", "Move up");
+    this.orderUpBtn.classList.add(
+      "btn",
+      "btn-primary",
+      "btn-sm",
+      "tooltip",
+      "tooltip-right",
+    );
+    this.rowOrder.appendChild(this.orderUpBtn);
+    this.orderUpBtn.disabled = PolarVisRow.PolarVisRows.length < 1;
+    this.orderUpBtn.onclick = this.moveUp.bind(this);
+
+    this.orderDownBtn = document.createElement("button");
+    const orderDownIcon = document.createElement("i");
+    orderDownIcon.classList.add("icon", "icon-arrow-down");
+    this.orderDownBtn.appendChild(orderDownIcon);
+
+    this.orderDownBtn.setAttribute("data-tooltip", "Move down");
+    this.orderDownBtn.classList.add(
+      "btn",
+      "btn-primary",
+      "btn-sm",
+      "tooltip",
+      "tooltip-right",
+    );
+    this.rowOrder.appendChild(this.orderDownBtn);
+    this.orderDownBtn.disabled = true;
+
+    if (PolarVisRow.PolarVisRows.length > 0) {
+      PolarVisRow.PolarVisRows[
+        PolarVisRow.PolarVisRows.length - 1
+      ].orderDownBtn.disabled = false;
+    }
+    this.orderDownBtn.onclick = this.moveDown.bind(this);
 
     this.bodypartLabel = createDiv(
       "bodypartLabel",
       this.dataInfo,
-      ["half-width", "center"],
+      ["bodypart-text"],
       "Bodypart:",
     );
 
     this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
-      "half-width",
+      "bodypart-select",
     ]);
 
     this.bodypartSelect = createSelect(
@@ -323,14 +401,9 @@ class PolarVisRow {
       getPolarRowId,
     );
 
-    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, [
-      "left",
-      "full-width",
-      "flexbox",
-    ]);
+    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, ["data-ctrl"]);
     this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
-      "full-width",
-      "full-height",
+      "full-width-height",
     ]);
   }
 
@@ -370,6 +443,49 @@ class PolarVisRow {
     this.ACCFormSelect.selectedIndex = 0;
     this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
     this.ACCFormSelect.disabled = true;
+  }
+
+  moveUp(ev: any) {
+    this.order -= 1;
+    // this.polarSensorDiv.setAttribute("order", this.order.toString());
+    this.polarSensorDiv.style.order = this.order.toString();
+    const prevRow = PolarVisRow.PolarVisRows[this.order];
+    prevRow.order += 1;
+    prevRow.polarSensorDiv.style.order = prevRow.order.toString();
+    // prevRow.polarSensorDiv.setAttribute("order", prevRow.order.toString());
+    // this.parent.removeChild(this.polarSensorDiv);
+    // this.parent.insertBefore(this.polarSensorDiv, prevRow.polarSensorDiv);
+    PolarVisRow.PolarVisRows[this.order] = this;
+    PolarVisRow.PolarVisRows[prevRow.order] = prevRow;
+    if (this.order === 0) {
+      PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = true;
+      PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = false;
+    }
+    if (prevRow.order === PolarVisRow.PolarVisRows.length - 1) {
+      PolarVisRow.PolarVisRows[prevRow.order].orderDownBtn.disabled = true;
+      PolarVisRow.PolarVisRows[prevRow.order].orderUpBtn.disabled = false;
+    }
+  }
+
+  moveDown(ev: any) {
+    this.order += 1;
+    this.polarSensorDiv.style.order = this.order.toString();
+    const nextRow = PolarVisRow.PolarVisRows[this.order];
+    nextRow.order -= 1;
+    nextRow.polarSensorDiv.style.order = nextRow.order.toString();
+    // this.parent.removeChild(nextRow.polarSensorDiv);
+    // this.parent.insertBefore(nextRow.polarSensorDiv, this.polarSensorDiv);
+    PolarVisRow.PolarVisRows[this.order] = this;
+    PolarVisRow.PolarVisRows[nextRow.order] = nextRow;
+
+    if (this.order === PolarVisRow.PolarVisRows.length - 1) {
+      PolarVisRow.PolarVisRows[this.order].orderUpBtn.disabled = false;
+      PolarVisRow.PolarVisRows[this.order].orderDownBtn.disabled = true;
+    }
+    if (nextRow.order === 0) {
+      PolarVisRow.PolarVisRows[nextRow.order].orderDownBtn.disabled = false;
+      PolarVisRow.PolarVisRows[nextRow.order].orderUpBtn.disabled = true;
+    }
   }
 
   async onToggleECG(ev: any) {
