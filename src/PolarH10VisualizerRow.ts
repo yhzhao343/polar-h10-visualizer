@@ -967,48 +967,36 @@ class PolarVisRow {
       const estimated_sample_interval =
         (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
         data.samples.length;
-      const samples = Array.from(data.samples);
-      const filteredSamples = this.ecg_rms_iir.multiStep(samples);
-      const filteredSamplesSquared = filteredSamples.map(e => e * e);
-      const dataTimeout = Array.from({ length: samples.length }, (_, s_i) => {
-        return s_i * estimated_sample_interval;
-      });
-      const samplesTimestamps = Array.from(
-        { length: samples.length },
-        (_, s_i) => {
-          return (
-            data.event_time_offset_ms +
-            data.prev_sample_timestamp_ms +
-            estimated_sample_interval * (s_i + 1)
-          );
-        },
-      );
+      const timeOffset = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval;
 
-      for (let s_i = 0; s_i < samples.length; s_i++) {
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const plotDelay = s_i * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const sample_i = (data.samples as Int32Array)[s_i];
+        const filtered_sample_i = this.ecg_rms_iir.singleStep(sample_i);
+        const filtered_sample_squared_i = filtered_sample_i * filtered_sample_i;
+        let data_rms_i: number | undefined = undefined;
+        if (this.ecg_ss_win !== undefined) {
+          this.ecg_ss += filtered_sample_squared_i;
+          if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
+            this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
+            this.ecg_ss_win_i++;
+          } else {
+            this.ecg_ss -= this.ecg_ss_win[0];
+            this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
+            this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_sample_squared_i;
+          }
+          if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
+            data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
+          }
+        }
         setTimeout(() => {
-          const timestamp = samplesTimestamps[s_i];
-          const sample_i = samples[s_i];
-          const filtered_sample_i = filteredSamples[s_i];
-          const filtered_sample_squared_i = filteredSamplesSquared[s_i];
           this.ecg_ts?.append(timestamp, sample_i);
           this.ecg_hp_ts?.append(timestamp, filtered_sample_i);
-
-          if (this.ecg_ss_win !== undefined) {
-            this.ecg_ss += filtered_sample_squared_i;
-            if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
-              this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
-              this.ecg_ss_win_i++;
-            } else {
-              this.ecg_ss -= this.ecg_ss_win[0];
-              this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
-              this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] = filtered_sample_squared_i;
-            }
-            if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
-              const data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
-              this.ecg_rms_ts?.append(timestamp, data_rms_i);
-            }
+          if (data_rms_i !== undefined) {
+            this.ecg_rms_ts?.append(timestamp, data_rms_i);
           }
-        }, dataTimeout[s_i]);
+        }, plotDelay);
       }
     }
   }
@@ -1030,28 +1018,22 @@ class PolarVisRow {
       this.acc_phi_ts !== undefined &&
       this.acc_theta_ts !== undefined
     ) {
+      const numFrame = (data.samples.length / 3);
       const estimated_sample_interval =
         (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
-        (data.samples.length / 3);
+        numFrame;
+      const timeOffset = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval;
+
       for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
         const frameNum = Math.floor(s_i / 3);
-        const timestamp =
-          data.event_time_offset_ms +
-          data.prev_sample_timestamp_ms +
-          estimated_sample_interval * (frameNum + 1);
-        const data_i_timeout_ms = frameNum * estimated_sample_interval;
+        const plotDelay = frameNum * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
         const y_d = -(data.samples as Int16Array)[s_i];
         const x_d = -(data.samples as Int16Array)[s_i + 1];
         const z_d = (data.samples as Int16Array)[s_i + 2];
-        tsUpdate(this.acc_x_ts, x_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_y_ts, y_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_z_ts, z_d, timestamp, data_i_timeout_ms);
         const x_lp_d = this.acc_x_iir.singleStep(x_d);
         const y_lp_d = this.acc_y_iir.singleStep(y_d);
         const z_lp_d = this.acc_z_iir.singleStep(z_d);
-        tsUpdate(this.acc_x_lp_ts, x_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_y_lp_ts, y_lp_d, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_z_lp_ts, z_lp_d, timestamp, data_i_timeout_ms);
         const rho =
           (Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) /
             Math.PI) *
@@ -1064,9 +1046,17 @@ class PolarVisRow {
           (Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) /
             Math.PI) *
           180;
-        tsUpdate(this.acc_rho_ts, rho, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_phi_ts, phi, timestamp, data_i_timeout_ms);
-        tsUpdate(this.acc_theta_ts, theta, timestamp, data_i_timeout_ms);
+        setTimeout(() => {
+          this.acc_x_ts?.append(timestamp, x_d);
+          this.acc_y_ts?.append(timestamp, y_d);
+          this.acc_z_ts?.append(timestamp, z_d);
+          this.acc_x_lp_ts?.append(timestamp, x_lp_d);
+          this.acc_y_lp_ts?.append(timestamp, y_lp_d);
+          this.acc_z_lp_ts?.append(timestamp, z_lp_d);
+          this.acc_rho_ts?.append(timestamp, rho);
+          this.acc_phi_ts?.append(timestamp, phi);
+          this.acc_theta_ts?.append(timestamp, theta);
+        }, plotDelay);
       }
     }
   }
