@@ -1936,7 +1936,7 @@ async function createPolarVisRow(content2, device) {
 }
 var PolarVisRow = class _PolarVisRow {
   static polarRowID = 0;
-  static PolarVisRows = [];
+  static polarVisRows = [];
   device;
   polarH10;
   deviceName;
@@ -2031,7 +2031,7 @@ var PolarVisRow = class _PolarVisRow {
       await this.initDeviceInfo();
       await this.initDeviceGraphCtrl();
       _PolarVisRow.polarRowID += 1;
-      _PolarVisRow.PolarVisRows.push(this);
+      _PolarVisRow.polarVisRows.push(this);
     } catch (err) {
       this.disconnectPolarH10();
       alert(err);
@@ -2041,22 +2041,22 @@ var PolarVisRow = class _PolarVisRow {
     if (this.parent.contains(this.polarSensorDiv)) {
       this.parent.removeChild(this.polarSensorDiv);
     }
-    const myInd = _PolarVisRow.PolarVisRows.indexOf(this);
+    const myInd = _PolarVisRow.polarVisRows.indexOf(this);
     if (myInd > -1) {
-      _PolarVisRow.PolarVisRows.splice(myInd, 1);
-      if (_PolarVisRow.PolarVisRows.length > 0) {
-        if (myInd === _PolarVisRow.PolarVisRows.length) {
-          _PolarVisRow.PolarVisRows[myInd - 1].orderDownBtn.disabled = true;
+      _PolarVisRow.polarVisRows.splice(myInd, 1);
+      if (_PolarVisRow.polarVisRows.length > 0) {
+        if (myInd === _PolarVisRow.polarVisRows.length) {
+          _PolarVisRow.polarVisRows[myInd - 1].orderDownBtn.disabled = true;
         } else if (myInd === 0) {
-          _PolarVisRow.PolarVisRows[0].orderUpBtn.disabled = true;
+          _PolarVisRow.polarVisRows[0].orderUpBtn.disabled = true;
         }
         _PolarVisRow.reOrderRows();
       }
     }
   }
   static reOrderRows() {
-    for (let i = 0; i < _PolarVisRow.PolarVisRows.length; i++) {
-      const row = _PolarVisRow.PolarVisRows[i];
+    for (let i = 0; i < _PolarVisRow.polarVisRows.length; i++) {
+      const row = _PolarVisRow.polarVisRows[i];
       row.order = i;
       row.polarSensorDiv.style.order = i.toString();
     }
@@ -2070,7 +2070,7 @@ var PolarVisRow = class _PolarVisRow {
       "polar-sensor-left-panel",
       "center"
     ]);
-    this.order = _PolarVisRow.PolarVisRows.length;
+    this.order = _PolarVisRow.polarVisRows.length;
     this.polarSensorDiv.style.order = this.order.toString();
     this.nameDiv = createDiv(
       `device-name-batt`,
@@ -2084,13 +2084,7 @@ var PolarVisRow = class _PolarVisRow {
       "full-width",
       "flexbox"
     ]);
-    try {
-      this.polarH10 = new PolarH10(this.device);
-      await this.polarH10.init();
-    } catch (err) {
-      console.log(err);
-      throw new Error("polarH10 device initialization failed!");
-    }
+    await this.initPolarH10IfUnique();
   }
   async disconnectPolarH10(ev = void 0) {
     this.removeSelf();
@@ -2103,11 +2097,7 @@ var PolarVisRow = class _PolarVisRow {
     if (this.ECGDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ECGDiv);
       this.polarH10.removeEventListener("ECG", this.newECGCallback);
-      try {
-        await this.polarH10.stopECG();
-      } catch (e) {
-        alert(e);
-      }
+      await this.stopECG();
     }
     this.resetECG();
     if (this.acc_chart !== void 0) {
@@ -2119,14 +2109,50 @@ var PolarVisRow = class _PolarVisRow {
     if (this.ACCDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ACCDiv);
       this.polarH10.removeEventListener("ACC", this.newACCCallback);
-      try {
-        await this.polarH10.stopACC();
-      } catch (e) {
-        alert(e);
-      }
+      await this.stopAcc();
     }
     this.resetACC();
-    this.device.gatt?.disconnect();
+    this.disconnectPolarH10IfAlone();
+  }
+  static includesDuplicate(self2, key = "device", conditionCallback = void 0) {
+    let duplicateInd = -1;
+    if (conditionCallback !== void 0) {
+      for (let i = 0; i < _PolarVisRow.polarVisRows.length; i++) {
+        let row = _PolarVisRow.polarVisRows[i];
+        if (row !== self2 && row[key] === self2[key] && conditionCallback(row)) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    } else {
+      for (let i = 0; i < _PolarVisRow.polarVisRows.length; i++) {
+        let row = _PolarVisRow.polarVisRows[i];
+        if (row !== self2 && row[key] === self2[key]) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    }
+    return duplicateInd;
+  }
+  disconnectPolarH10IfAlone() {
+    if (_PolarVisRow.includesDuplicate(this, "device") === -1) {
+      this.device.gatt?.disconnect();
+    }
+  }
+  async initPolarH10IfUnique() {
+    const duplicateInd = _PolarVisRow.includesDuplicate(this, "device");
+    if (duplicateInd < 0) {
+      try {
+        this.polarH10 = new PolarH10(this.device);
+        await this.polarH10.init();
+      } catch (err) {
+        console.log(err);
+        throw new Error("polarH10 device initialization failed!");
+      }
+    } else {
+      this.polarH10 = _PolarVisRow.polarVisRows[duplicateInd].polarH10;
+    }
   }
   resetECG() {
     this.ecg_canvas = void 0;
@@ -2198,14 +2224,24 @@ var PolarVisRow = class _PolarVisRow {
     this.optionDiv.classList.remove("center");
     this.nameDiv.textContent = "";
     this.nameDiv.classList.add("flex");
-    this.deviceNameDiv = createDiv("devicename", this.nameDiv, ["padright-5px", "flexbox"], this.deviceName);
+    this.deviceNameDiv = createDiv(
+      "devicename",
+      this.nameDiv,
+      ["padright-5px", "flexbox"],
+      this.deviceName
+    );
     let battStr;
     if (this.battLvl > LOW_BATT_LVL) {
       battStr = `\u{1F50B}${this.battLvl}%`;
     } else {
       battStr = `\u{1FAAB}${this.battLvl}%`;
     }
-    this.battLvlDiv = createDiv("battLvl", this.nameDiv, ["flexbox", "mid-text"], battStr);
+    this.battLvlDiv = createDiv(
+      "battLvl",
+      this.nameDiv,
+      ["flexbox", "mid-text"],
+      battStr
+    );
     this.nameDiv.classList.add("flexbox");
     this.deviceInfoDiv.appendChild(this.disconnectDiv);
     this.deviceInfoDiv.appendChild(this.nameDiv);
@@ -2225,7 +2261,7 @@ var PolarVisRow = class _PolarVisRow {
       "tooltip-right"
     );
     this.rowOrder.appendChild(this.orderUpBtn);
-    this.orderUpBtn.disabled = _PolarVisRow.PolarVisRows.length < 1;
+    this.orderUpBtn.disabled = _PolarVisRow.polarVisRows.length < 1;
     this.orderUpBtn.onclick = this.moveUp.bind(this);
     this.orderDownBtn = document.createElement("button");
     const orderDownIcon = document.createElement("i");
@@ -2241,8 +2277,8 @@ var PolarVisRow = class _PolarVisRow {
     );
     this.rowOrder.appendChild(this.orderDownBtn);
     this.orderDownBtn.disabled = true;
-    if (_PolarVisRow.PolarVisRows.length > 0) {
-      _PolarVisRow.PolarVisRows[_PolarVisRow.PolarVisRows.length - 1].orderDownBtn.disabled = false;
+    if (_PolarVisRow.polarVisRows.length > 0) {
+      _PolarVisRow.polarVisRows[_PolarVisRow.polarVisRows.length - 1].orderDownBtn.disabled = false;
     }
     this.orderDownBtn.onclick = this.moveDown.bind(this);
     this.bodypartLabel = createDiv(
@@ -2306,19 +2342,19 @@ var PolarVisRow = class _PolarVisRow {
   moveUp(ev) {
     this.order -= 1;
     this.polarSensorDiv.style.order = this.order.toString();
-    const prevRow = _PolarVisRow.PolarVisRows[this.order];
+    const prevRow = _PolarVisRow.polarVisRows[this.order];
     prevRow.order += 1;
     prevRow.polarSensorDiv.style.order = prevRow.order.toString();
-    _PolarVisRow.PolarVisRows[this.order] = this;
-    _PolarVisRow.PolarVisRows[prevRow.order] = prevRow;
+    _PolarVisRow.polarVisRows[this.order] = this;
+    _PolarVisRow.polarVisRows[prevRow.order] = prevRow;
     if (this.order === 0) {
       this.orderUpBtn.disabled = true;
       this.orderDownBtn.disabled = false;
       prevRow.orderUpBtn.disabled = false;
-    } else if (this.order === _PolarVisRow.PolarVisRows.length - 2) {
+    } else if (this.order === _PolarVisRow.polarVisRows.length - 2) {
       this.orderDownBtn.disabled = false;
     }
-    if (prevRow.order === _PolarVisRow.PolarVisRows.length - 1) {
+    if (prevRow.order === _PolarVisRow.polarVisRows.length - 1) {
       prevRow.orderDownBtn.disabled = true;
       prevRow.orderUpBtn.disabled = false;
     }
@@ -2326,12 +2362,12 @@ var PolarVisRow = class _PolarVisRow {
   moveDown(ev) {
     this.order += 1;
     this.polarSensorDiv.style.order = this.order.toString();
-    const nextRow = _PolarVisRow.PolarVisRows[this.order];
+    const nextRow = _PolarVisRow.polarVisRows[this.order];
     nextRow.order -= 1;
     nextRow.polarSensorDiv.style.order = nextRow.order.toString();
-    _PolarVisRow.PolarVisRows[this.order] = this;
-    _PolarVisRow.PolarVisRows[nextRow.order] = nextRow;
-    if (this.order === _PolarVisRow.PolarVisRows.length - 1) {
+    _PolarVisRow.polarVisRows[this.order] = this;
+    _PolarVisRow.polarVisRows[nextRow.order] = nextRow;
+    if (this.order === _PolarVisRow.polarVisRows.length - 1) {
       this.orderUpBtn.disabled = false;
       this.orderDownBtn.disabled = true;
       nextRow.orderDownBtn.disabled = false;
@@ -2342,6 +2378,82 @@ var PolarVisRow = class _PolarVisRow {
       nextRow.orderDownBtn.disabled = false;
       nextRow.orderUpBtn.disabled = true;
     }
+  }
+  async startECG(sampleRate = EXG_SAMPLE_RATE_HZ, addCallback = true) {
+    const duplicateInd = _PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const startECGReply = await this.polarH10.startECG(sampleRate);
+        if (startECGReply?.error === "SUCCESS" || startECGReply?.error === "ALREADY IN STATE") {
+          if (addCallback) {
+            this.polarH10.addEventListener("ECG", this.newECGCallback);
+          }
+        } else {
+          console.log(startECGReply);
+          this.disconnectPolarH10();
+        }
+      } catch (e) {
+        alert(e);
+        this.disconnectPolarH10();
+      }
+    } else {
+      this.polarH10.addEventListener("ECG", this.newECGCallback);
+    }
+  }
+  async stopECG() {
+    const duplicateInd = _PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const stopECGReply = await this.polarH10.stopECG();
+        if (stopECGReply) {
+          console.log(stopECGReply);
+        }
+      } catch (e) {
+        console.log(e);
+        alert(e);
+      }
+    }
+  }
+  async startACC(range = ACC_RANGE_G, sampleRate = ACC_SAMPLE_RATE_HZ, addCallback = true) {
+    const duplicateInd = _PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const startACCReply = await this.polarH10.startACC(range, sampleRate);
+        if (startACCReply?.error === "SUCCESS" || startACCReply?.error === "ALREADY IN STATE") {
+          if (addCallback) {
+            this.polarH10.addEventListener("ACC", this.newACCCallback);
+          }
+        } else {
+          console.log(startACCReply);
+          this.disconnectPolarH10();
+        }
+      } catch (e) {
+        alert(e);
+        this.disconnectPolarH10();
+      }
+    } else {
+      this.polarH10.addEventListener("ACC", this.newACCCallback);
+    }
+  }
+  async stopAcc() {
+    const duplicateInd = _PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const stopACCReply = await this.polarH10.stopACC();
+        if (stopACCReply) {
+          console.log(stopACCReply);
+        }
+      } catch (e) {
+        console.log(e);
+        alert(e);
+      }
+    }
+  }
+  ECGIsOn() {
+    return this.ECGDiv !== void 0;
+  }
+  ACCIsOn() {
+    return this.ACCDiv !== void 0;
   }
   async onToggleECG(ev) {
     this.ACCSwitchInput.disabled = true;
@@ -2402,18 +2514,7 @@ var PolarVisRow = class _PolarVisRow {
         [this.ecg_ts, this.ecg_rms_ts, this.ecg_hp_ts],
         [exg_legend, exg_rms_legend, exg_hp_legend]
       );
-      try {
-        const startECGReply = await this.polarH10.startECG(EXG_SAMPLE_RATE_HZ);
-        if (startECGReply?.error === "SUCCESS" || startECGReply?.error === "ALREADY IN STATE") {
-          this.polarH10.addEventListener("ECG", this.newECGCallback);
-        } else {
-          console.log(startECGReply);
-          this.disconnectPolarH10();
-        }
-      } catch (e) {
-        console.log(e);
-        this.disconnectPolarH10();
-      }
+      await this.startECG(EXG_SAMPLE_RATE_HZ);
     } else {
       if (this.ECGDiv !== void 0 && this.ecg_canvas !== void 0 && this.ecg_chart !== void 0) {
         this.ecg_chart.stop();
@@ -2424,14 +2525,7 @@ var PolarVisRow = class _PolarVisRow {
         if (this.ECGDiv.contains(this.ecg_canvas)) {
           this.ACCDiv?.classList.remove("half-width");
           this.ACCDiv?.classList.add("full-width");
-          try {
-            const stopECGReply = await this.polarH10.stopECG();
-            if (stopECGReply) {
-              console.log(stopECGReply);
-            }
-          } catch (e) {
-            alert(e);
-          }
+          await this.stopECG();
           this.visContainerDiv.removeChild(this.ECGDiv);
           this.ecg_resize_observer?.disconnect();
           this.polarH10.removeEventListener("ECG", this.newECGCallback);
@@ -2502,7 +2596,9 @@ var PolarVisRow = class _PolarVisRow {
         Fc: AAC_LOWPASS_CUTOFF_HZ,
         preGain: false
       });
-      const AAC_MAG_BANDPASS_CENTER = Math.sqrt(AAC_MAG_BANDPASS_HIGH_CUT_HZ * AAC_MAG_BANDPASS_LOW_CUT_HZ);
+      const AAC_MAG_BANDPASS_CENTER = Math.sqrt(
+        AAC_MAG_BANDPASS_HIGH_CUT_HZ * AAC_MAG_BANDPASS_LOW_CUT_HZ
+      );
       const AAC_MAG_BANDPASS_BW = AAC_MAG_BANDPASS_HIGH_CUT_HZ - AAC_MAG_BANDPASS_LOW_CUT_HZ;
       this.acc_mag_iir_coef = IIRCalc.bandpass({
         order: AAC_MAG_LOWPASS_ORDER,
@@ -2519,28 +2615,32 @@ var PolarVisRow = class _PolarVisRow {
       this.acc_resize();
       this.configureACCGraph = configTSforChartGen(
         this.acc_chart,
-        [this.acc_x_ts, this.acc_y_ts, this.acc_z_ts, this.acc_x_lp_ts, this.acc_y_lp_ts, this.acc_z_lp_ts, this.acc_rho_ts, this.acc_phi_ts, this.acc_theta_ts, this.acc_mag_ts, this.acc_mag_bp_ts],
-        [acc_lp_legend, tilt_legend, acc_mag_legend, acc_mag_bp_legend, acc_legend]
+        [
+          this.acc_x_ts,
+          this.acc_y_ts,
+          this.acc_z_ts,
+          this.acc_x_lp_ts,
+          this.acc_y_lp_ts,
+          this.acc_z_lp_ts,
+          this.acc_rho_ts,
+          this.acc_phi_ts,
+          this.acc_theta_ts,
+          this.acc_mag_ts,
+          this.acc_mag_bp_ts
+        ],
+        [
+          acc_lp_legend,
+          tilt_legend,
+          acc_mag_legend,
+          acc_mag_bp_legend,
+          acc_legend
+        ]
       );
       if (this.ACCFormSelect !== void 0) {
         this.ACCFormSelect.disabled = false;
         this.ACCFormSelect.selectedIndex = 0;
       }
-      try {
-        let startACCReply = await this.polarH10.startACC(
-          ACC_RANGE_G,
-          ACC_SAMPLE_RATE_HZ
-        );
-        if (startACCReply?.error === "SUCCESS" || startACCReply?.error === "ALREADY IN STATE") {
-          this.polarH10.addEventListener("ACC", this.newACCCallback);
-        } else {
-          console.log(startACCReply);
-          this.disconnectPolarH10();
-        }
-      } catch (e) {
-        console.log(e);
-        this.disconnectPolarH10();
-      }
+      await this.startACC(ACC_RANGE_G, ACC_SAMPLE_RATE_HZ);
     } else {
       if (this.ACCDiv !== void 0 && this.acc_canvas !== void 0 && this.acc_chart !== void 0) {
         this.acc_chart.stop();
@@ -2556,14 +2656,7 @@ var PolarVisRow = class _PolarVisRow {
         this.polarH10.removeEventListener("ACC", this.newACCCallback);
         this.visContainerDiv.removeChild(this.ACCDiv);
         this.acc_resize_observer?.disconnect();
-        try {
-          const stopACCReply = await this.polarH10.stopACC();
-          if (stopACCReply) {
-            console.log(stopACCReply);
-          }
-        } catch (e) {
-          alert(e);
-        }
+        await this.stopAcc();
         this.resetACC();
       }
     }
@@ -2633,7 +2726,11 @@ var PolarVisRow = class _PolarVisRow {
           title2 = DEFAULT_ACC_LINE_CHART_OPTION.title?.text || title2;
           this.configureACCGraph(
             [this.acc_x_ts, this.acc_y_ts, this.acc_z_ts],
-            [X_AXIS_PRESENTATION_OPTIONS, Y_AXIS_PRESENTATION_OPTIONS, Z_AXIS_PRESENTATION_OPTIONS],
+            [
+              X_AXIS_PRESENTATION_OPTIONS,
+              Y_AXIS_PRESENTATION_OPTIONS,
+              Z_AXIS_PRESENTATION_OPTIONS
+            ],
             [acc_legend],
             true,
             this.ACC_MIN,
@@ -2647,7 +2744,11 @@ var PolarVisRow = class _PolarVisRow {
           title2 = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
           this.configureACCGraph(
             [this.acc_x_lp_ts, this.acc_y_lp_ts, this.acc_z_lp_ts],
-            [X_LP_AXIS_PRESENTATION_OPTIONS, Y_LP_AXIS_PRESENTATION_OPTIONS, Z_LP_AXIS_PRESENTATION_OPTIONS],
+            [
+              X_LP_AXIS_PRESENTATION_OPTIONS,
+              Y_LP_AXIS_PRESENTATION_OPTIONS,
+              Z_LP_AXIS_PRESENTATION_OPTIONS
+            ],
             [acc_lp_legend],
             true,
             this.ACC_MIN,
@@ -2661,7 +2762,11 @@ var PolarVisRow = class _PolarVisRow {
           title2 = "Tilt angle [-90\xB0, 90\xB0] from lowpass on accelerometer raw";
           this.configureACCGraph(
             [this.acc_rho_ts, this.acc_phi_ts, this.acc_theta_ts],
-            [RHO_AXIS_PRESENTATION_OPTIONS, PHI_AXIS_PRESENTATION_OPTIONS, THETA_AXIS_PRESENTATION_OPTIONS],
+            [
+              RHO_AXIS_PRESENTATION_OPTIONS,
+              PHI_AXIS_PRESENTATION_OPTIONS,
+              THETA_AXIS_PRESENTATION_OPTIONS
+            ],
             [tilt_legend],
             false,
             -140,
@@ -3103,6 +3208,12 @@ function configureHTMLElement(e, id, parent = void 0, classList = [], textConten
 function getPolarRowId() {
   return PolarVisRow.polarRowID;
 }
+function ECGIsOn(row) {
+  return row.ECGDiv !== void 0;
+}
+function ACCIsOn(row) {
+  return row.ACCDiv !== void 0;
+}
 
 // src/index.ts
 var webapp_container = document.createElement("div");
@@ -3160,9 +3271,6 @@ function polarConnectHandleGen(parentCoponent, btDeviceHandler) {
       });
     } catch (err) {
       console.log(err);
-      return;
-    }
-    if (device.gatt?.connected) {
       return;
     }
     btDeviceHandler(parentCoponent, device);
