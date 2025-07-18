@@ -69,9 +69,9 @@ function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
       console.log(err);
       return;
     }
-    if (device.gatt?.connected) {
-      return;
-    }
+    // if (device.gatt?.connected) {
+    // return;
+    // }
     btDeviceHandler(parentCoponent, device);
   };
 }
