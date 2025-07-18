@@ -1285,6 +1285,9 @@ var CustomSmoothie = class extends import_smoothie.SmoothieChart {
       return [];
     }
   };
+  clearPostRenderCallback = function(callback) {
+    this.postRender = [];
+  };
 };
 
 // src/PolarH10VisualizerRow.ts
@@ -1743,7 +1746,8 @@ var EXTRA_OFFSET_NS = EPOCH2018_OFFSET_NS - EPOCH2000_OFFSET_NS;
 var EXTRA_OFFSET_MS_WHOLE = EXTRA_OFFSET_NS / BigInt(1e6);
 var EXTRA_OFFSET_MS_DECIMAL = Number(EXTRA_OFFSET_NS - EXTRA_OFFSET_MS_WHOLE * BigInt(1e6)) / 1e6;
 var EXTRA_OFFSET_MS = EXTRA_OFFSET_MS_DECIMAL + Number(EXTRA_OFFSET_MS_DECIMAL);
-var LOW_BATT_LVL = 40;
+var SCROLL_MAX_LIMIT_FACTOR = 5;
+var LOW_BATT_LVL = 35;
 var EXG_STREAM_DELAY_MS = 600;
 var EXG_RMS_WINDOW_MS = 200;
 var EXG_RMS_WINDOW_SIZE = Math.round(130 / (1e3 / EXG_RMS_WINDOW_MS));
@@ -1754,6 +1758,9 @@ var EXG_RMS_MAX = 120;
 var EXG_RMS_HIGHPASS_CUTOFF_HZ = 25;
 var EXG_RMS_HIGHPASS_ORDER = 4;
 var EXG_SAMPLE_RATE_HZ = 130;
+var EXG_HP_SCROLL_MIN = 5;
+var EXG_RMS_SCROLL_MIN = 5;
+var EXG_DELTA = 1;
 var ACC_STREAM_DELAY_MS = 600;
 var ACC_SAMPLE_RATE_HZ = 100;
 var ACC_RANGE_G = 4;
@@ -1762,6 +1769,15 @@ var ACC_MAX = 2e3;
 var AAC_LOWPASS_CUTOFF_HZ = 10;
 var AAC_LOWPASS_ORDER = 4;
 var SCROLL_LEGENT_DISP_TIME_MS = 1500;
+var ACC_DELTA = 10;
+var ACC_SCROLL_MIN = 100;
+var AAC_MAG_BANDPASS_HIGH_CUT_HZ = 2.5;
+var AAC_MAG_BANDPASS_LOW_CUT_HZ = 0.1;
+var AAC_MAG_LOWPASS_ORDER = 4;
+var ACC_MAG_BP_MIN = -20;
+var ACC_MAG_BP_MAX = 20;
+var ACC_MAG_DELTA = 1;
+var ACC_MAG_SCROLL_MIN = 1;
 var DEFAULT_EXG_LINE_CHART_OPTION = {
   // limitFPS: 60,
   grid: {
@@ -1872,6 +1888,16 @@ var THETA_AXIS_PRESENTATION_OPTIONS = {
   interpolation: "linear",
   strokeStyle: "#ffff78cc"
 };
+var MAG_PRESENTATION_OPTIONS = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ffdcaacc"
+};
+var MAG_LP_PRESENTATION_OPTIONS = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#dcaaffcc"
+};
 var PolarSensorType2 = /* @__PURE__ */ ((PolarSensorType3) => {
   PolarSensorType3[PolarSensorType3["ECG"] = 0] = "ECG";
   PolarSensorType3[PolarSensorType3["PPG"] = 1] = "PPG";
@@ -1888,6 +1914,18 @@ var PolarSensorType2 = /* @__PURE__ */ ((PolarSensorType3) => {
 var PolarSensorNames2 = Object.keys(PolarSensorType2).filter(
   (t) => isNaN(Number(t))
 );
+var EXG_DATA_OPTIONS = [
+  "Raw",
+  `${EXG_RMS_HIGHPASS_CUTOFF_HZ.toFixed(0)}Hz Highpass`,
+  "RMS"
+];
+var ACC_DATA_OPTIONS = [
+  "Raw",
+  `${AAC_LOWPASS_CUTOFF_HZ.toFixed(0)}Hz Lowpass`,
+  "Tilt",
+  "Magnitude",
+  `${AAC_MAG_BANDPASS_LOW_CUT_HZ.toFixed(1)}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ.toFixed(1)}Hz mag`
+];
 
 // src/PolarH10VisualizerRow.ts
 var IIRCalc = new import_fili.CalcCascades();
@@ -1910,6 +1948,8 @@ var PolarVisRow = class _PolarVisRow {
   nameDiv;
   loadingDiv;
   disconnectDiv;
+  deviceNameDiv;
+  battLvlDiv;
   dataInfo;
   bodypartLabel;
   bodypartSelectDiv;
@@ -1926,6 +1966,8 @@ var PolarVisRow = class _PolarVisRow {
   EXG_RMS_MAX = EXG_RMS_MAX;
   ACC_MIN = ACC_MIN;
   ACC_MAX = ACC_MAX;
+  ACC_MAG_BP_MIN = ACC_MAG_BP_MIN;
+  ACC_MAG_BP_MAX = ACC_MAG_BP_MAX;
   orderUpBtn;
   orderDownBtn;
   EXGFormSelect;
@@ -1959,12 +2001,18 @@ var PolarVisRow = class _PolarVisRow {
   acc_rho_ts = void 0;
   acc_phi_ts = void 0;
   acc_theta_ts = void 0;
+  acc_mag_ts = void 0;
+  acc_mag_bp_ts = void 0;
   acc_resize_observer = void 0;
   acc_canvas = void 0;
   acc_iir_coef = void 0;
+  acc_mag_iir_coef = void 0;
   acc_x_iir = void 0;
   acc_y_iir = void 0;
   acc_z_iir = void 0;
+  acc_mag_iir = void 0;
+  configureEXGGraph = void 0;
+  configureACCGraph = void 0;
   newECGCallback;
   newACCCallback;
   constructor(content2, device) {
@@ -2055,7 +2103,11 @@ var PolarVisRow = class _PolarVisRow {
     if (this.ECGDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ECGDiv);
       this.polarH10.removeEventListener("ECG", this.newECGCallback);
-      await this.polarH10.stopECG();
+      try {
+        await this.polarH10.stopECG();
+      } catch (e) {
+        alert(e);
+      }
     }
     this.resetECG();
     if (this.acc_chart !== void 0) {
@@ -2067,7 +2119,11 @@ var PolarVisRow = class _PolarVisRow {
     if (this.ACCDiv !== void 0) {
       this.visContainerDiv?.removeChild(this.ACCDiv);
       this.polarH10.removeEventListener("ACC", this.newACCCallback);
-      await this.polarH10.stopACC();
+      try {
+        await this.polarH10.stopACC();
+      } catch (e) {
+        alert(e);
+      }
     }
     this.resetACC();
     this.device.gatt?.disconnect();
@@ -2086,6 +2142,7 @@ var PolarVisRow = class _PolarVisRow {
     this.ecg_rms_iir = void 0;
     this.ecg_ss_win_i = 0;
     this.ecg_ss = 0;
+    this.configureEXGGraph = void 0;
   }
   resetACC() {
     this.ACCDiv = void 0;
@@ -2097,15 +2154,20 @@ var PolarVisRow = class _PolarVisRow {
     this.acc_z_ts = void 0;
     this.acc_resize_observer = void 0;
     this.acc_iir_coef = void 0;
+    this.acc_mag_iir_coef = void 0;
     this.acc_x_iir = void 0;
     this.acc_y_iir = void 0;
     this.acc_z_iir = void 0;
     this.acc_x_lp_ts = void 0;
     this.acc_y_lp_ts = void 0;
     this.acc_z_lp_ts = void 0;
+    this.acc_mag_iir = void 0;
     this.acc_rho_ts = void 0;
     this.acc_phi_ts = void 0;
     this.acc_theta_ts = void 0;
+    this.acc_mag_ts = void 0;
+    this.acc_mag_bp_ts = void 0;
+    this.configureACCGraph = void 0;
   }
   async initDeviceInfo() {
     this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
@@ -2136,20 +2198,14 @@ var PolarVisRow = class _PolarVisRow {
     this.optionDiv.classList.remove("center");
     this.nameDiv.textContent = "";
     this.nameDiv.classList.add("flex");
-    const deviceNameDiv = document.createElement("div");
-    deviceNameDiv.textContent = this.deviceName;
-    deviceNameDiv.classList.add("padright-5px", "flexbox");
-    this.nameDiv.appendChild(deviceNameDiv);
+    this.deviceNameDiv = createDiv("devicename", this.nameDiv, ["padright-5px", "flexbox"], this.deviceName);
     let battStr;
     if (this.battLvl > LOW_BATT_LVL) {
       battStr = `\u{1F50B}${this.battLvl}%`;
     } else {
       battStr = `\u{1FAAB}${this.battLvl}%`;
     }
-    const battLvlDiv = document.createElement("div");
-    battLvlDiv.textContent = battStr;
-    battLvlDiv.classList.add("flexbox");
-    this.nameDiv.appendChild(battLvlDiv);
+    this.battLvlDiv = createDiv("battLvl", this.nameDiv, ["flexbox", "mid-text"], battStr);
     this.nameDiv.classList.add("flexbox");
     this.deviceInfoDiv.appendChild(this.disconnectDiv);
     this.deviceInfoDiv.appendChild(this.nameDiv);
@@ -2224,7 +2280,7 @@ var PolarVisRow = class _PolarVisRow {
       this.EXGDropDown,
       ["form-select", "dark-select", "select-sm", "almost-full-width"],
       "",
-      ["Raw", "Highpass", "RMS"]
+      EXG_DATA_OPTIONS
     );
     this.EXGFormSelect.selectedIndex = 0;
     this.EXGFormSelect.onchange = this.changeEXGGraph.bind(this);
@@ -2241,7 +2297,7 @@ var PolarVisRow = class _PolarVisRow {
       this.ACCDropDown,
       ["form-select", "dark-select", "select-sm", "almost-full-width"],
       "",
-      ["Raw", "Lowpass", "Tilt"]
+      ACC_DATA_OPTIONS
     );
     this.ACCFormSelect.selectedIndex = 0;
     this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
@@ -2341,6 +2397,11 @@ var PolarVisRow = class _PolarVisRow {
         this.EXGFormSelect.disabled = false;
         this.EXGFormSelect.selectedIndex = 0;
       }
+      this.configureEXGGraph = configTSforChartGen(
+        this.ecg_chart,
+        [this.ecg_ts, this.ecg_rms_ts, this.ecg_hp_ts],
+        [exg_legend, exg_rms_legend, exg_hp_legend]
+      );
       try {
         const startECGReply = await this.polarH10.startECG(EXG_SAMPLE_RATE_HZ);
         if (startECGReply?.error === "SUCCESS" || startECGReply?.error === "ALREADY IN STATE") {
@@ -2363,9 +2424,13 @@ var PolarVisRow = class _PolarVisRow {
         if (this.ECGDiv.contains(this.ecg_canvas)) {
           this.ACCDiv?.classList.remove("half-width");
           this.ACCDiv?.classList.add("full-width");
-          const stopECGReply = await this.polarH10.stopECG();
-          if (stopECGReply) {
-            console.log(stopECGReply);
+          try {
+            const stopECGReply = await this.polarH10.stopECG();
+            if (stopECGReply) {
+              console.log(stopECGReply);
+            }
+          } catch (e) {
+            alert(e);
           }
           this.visContainerDiv.removeChild(this.ECGDiv);
           this.ecg_resize_observer?.disconnect();
@@ -2419,6 +2484,8 @@ var PolarVisRow = class _PolarVisRow {
       this.acc_rho_ts = new import_smoothie2.TimeSeries();
       this.acc_phi_ts = new import_smoothie2.TimeSeries();
       this.acc_theta_ts = new import_smoothie2.TimeSeries();
+      this.acc_mag_ts = new import_smoothie2.TimeSeries();
+      this.acc_mag_bp_ts = new import_smoothie2.TimeSeries();
       this.acc_resize = resizeSmoothieGen(this.acc_chart, 1, 1);
       this.acc_resize_observer = new ResizeObserver((entries) => {
         for (let entry of entries) {
@@ -2435,10 +2502,26 @@ var PolarVisRow = class _PolarVisRow {
         Fc: AAC_LOWPASS_CUTOFF_HZ,
         preGain: false
       });
+      const AAC_MAG_BANDPASS_CENTER = Math.sqrt(AAC_MAG_BANDPASS_HIGH_CUT_HZ * AAC_MAG_BANDPASS_LOW_CUT_HZ);
+      const AAC_MAG_BANDPASS_BW = AAC_MAG_BANDPASS_HIGH_CUT_HZ - AAC_MAG_BANDPASS_LOW_CUT_HZ;
+      this.acc_mag_iir_coef = IIRCalc.bandpass({
+        order: AAC_MAG_LOWPASS_ORDER,
+        characteristic: "butterworth",
+        Fs: ACC_SAMPLE_RATE_HZ,
+        BW: AAC_MAG_BANDPASS_BW,
+        Fc: AAC_MAG_BANDPASS_CENTER,
+        preGain: false
+      });
       this.acc_x_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
       this.acc_y_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
       this.acc_z_iir = (0, import_fili.IirFilter)(this.acc_iir_coef);
+      this.acc_mag_iir = (0, import_fili.IirFilter)(this.acc_mag_iir_coef);
       this.acc_resize();
+      this.configureACCGraph = configTSforChartGen(
+        this.acc_chart,
+        [this.acc_x_ts, this.acc_y_ts, this.acc_z_ts, this.acc_x_lp_ts, this.acc_y_lp_ts, this.acc_z_lp_ts, this.acc_rho_ts, this.acc_phi_ts, this.acc_theta_ts, this.acc_mag_ts, this.acc_mag_bp_ts],
+        [acc_lp_legend, tilt_legend, acc_mag_legend, acc_mag_bp_legend, acc_legend]
+      );
       if (this.ACCFormSelect !== void 0) {
         this.ACCFormSelect.disabled = false;
         this.ACCFormSelect.selectedIndex = 0;
@@ -2473,9 +2556,13 @@ var PolarVisRow = class _PolarVisRow {
         this.polarH10.removeEventListener("ACC", this.newACCCallback);
         this.visContainerDiv.removeChild(this.ACCDiv);
         this.acc_resize_observer?.disconnect();
-        const stopACCReply = await this.polarH10.stopACC();
-        if (stopACCReply) {
-          console.log(stopACCReply);
+        try {
+          const stopACCReply = await this.polarH10.stopACC();
+          if (stopACCReply) {
+            console.log(stopACCReply);
+          }
+        } catch (e) {
+          alert(e);
         }
         this.resetACC();
       }
@@ -2485,191 +2572,135 @@ var PolarVisRow = class _PolarVisRow {
     }
   }
   changeEXGGraph(evt) {
-    if (this.ecg_canvas !== void 0 && this.ecg_chart !== void 0 && this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0) {
+    if (this.ecg_canvas !== void 0 && this.ecg_chart !== void 0 && this.ecg_ts !== void 0 && this.ecg_rms_ts !== void 0 && this.ecg_hp_ts !== void 0 && this.configureEXGGraph !== void 0) {
       const selected = evt.target.selectedIndex;
+      let title2 = "";
       this.ecg_chart.stop();
       switch (selected) {
         case 0:
-          this.ecg_chart.removeTimeSeries(this.ecg_rms_ts);
-          this.ecg_chart.removeTimeSeries(this.ecg_hp_ts);
-          this.ecg_chart.addTimeSeries(this.ecg_ts, EXG_PRESENTATION_OPTIONS);
-          this.ecg_chart.options.minValue = void 0;
-          this.ecg_chart.options.maxValue = void 0;
-          this.ecg_chart.updateValueRange();
-          if (this.ecg_chart.options.title) {
-            this.ecg_chart.options.title.text = DEFAULT_EXG_LINE_CHART_OPTION.title?.text;
-          }
-          if (this.ecg_chart.removePostRenderCallback(exg_rms_legend).length || this.ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
-            this.ecg_chart.addPostRenderCallback(exg_legend);
-          }
+          title2 = DEFAULT_EXG_LINE_CHART_OPTION.title?.text || title2;
+          this.configureEXGGraph(
+            [this.ecg_ts],
+            [EXG_PRESENTATION_OPTIONS],
+            [exg_legend],
+            false,
+            void 0,
+            void 0,
+            title2,
+            false,
+            []
+          );
           break;
         case 1:
-          this.ecg_chart.removeTimeSeries(this.ecg_ts);
-          this.ecg_chart.removeTimeSeries(this.ecg_rms_ts);
-          this.ecg_chart.addTimeSeries(
-            this.ecg_hp_ts,
-            EXG_HP_PRESENTATION_OPTIONS
+          title2 = `Highpass (${EXG_RMS_HIGHPASS_CUTOFF_HZ}Hz ${EXG_RMS_HIGHPASS_ORDER}th order Butterworth) on ECG/EMG raw`;
+          this.configureEXGGraph(
+            [this.ecg_hp_ts],
+            [EXG_HP_PRESENTATION_OPTIONS],
+            [exg_hp_legend],
+            true,
+            this.EXG_HP_MIN,
+            this.EXG_HP_MAX,
+            title2,
+            false,
+            []
           );
-          this.ecg_chart.options.minValue = this.EXG_HP_MIN;
-          this.ecg_chart.options.maxValue = this.EXG_HP_MAX;
-          this.ecg_chart.updateValueRange();
-          if (this.ecg_chart.options.title) {
-            this.ecg_chart.options.title.text = `Highpass (${EXG_RMS_HIGHPASS_CUTOFF_HZ}Hz ${EXG_RMS_HIGHPASS_ORDER}th order Butterworth) on ECG/EMG raw`;
-          }
-          if (this.ecg_chart.removePostRenderCallback(exg_legend).length || this.ecg_chart.removePostRenderCallback(exg_rms_legend).length) {
-            this.ecg_chart.addPostRenderCallback(exg_hp_legend);
-            this.ecg_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (this.ecg_chart) {
-                this.ecg_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
           break;
         case 2:
-          this.ecg_chart.removeTimeSeries(this.ecg_ts);
-          this.ecg_chart.removeTimeSeries(this.ecg_hp_ts);
-          this.ecg_chart.addTimeSeries(
-            this.ecg_rms_ts,
-            EXG_RMS_PRESENTATION_OPTIONS
+          title2 = "RMS (Highpass on ECG/EMG raw)";
+          this.configureEXGGraph(
+            [this.ecg_rms_ts],
+            [EXG_RMS_PRESENTATION_OPTIONS],
+            [exg_rms_legend],
+            true,
+            this.EXG_RMS_MIN,
+            this.EXG_RMS_MAX,
+            title2,
+            false,
+            []
           );
-          this.ecg_chart.options.minValue = this.EXG_RMS_MIN;
-          this.ecg_chart.options.maxValue = this.EXG_RMS_MAX;
-          this.ecg_chart.updateValueRange();
-          if (this.ecg_chart.options.title) {
-            this.ecg_chart.options.title.text = `RMS (Highpass on ECG/EMG raw)`;
-          }
-          if (this.ecg_chart.removePostRenderCallback(exg_legend).length || this.ecg_chart.removePostRenderCallback(exg_hp_legend).length) {
-            this.ecg_chart.addPostRenderCallback(exg_rms_legend);
-            this.ecg_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (this.ecg_chart) {
-                this.ecg_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
           break;
       }
       this.ecg_chart.start();
     }
   }
   changeACCGraph(evt) {
-    if (this.acc_canvas !== void 0 && this.acc_chart !== void 0 && this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0) {
+    if (this.acc_canvas !== void 0 && this.acc_chart !== void 0 && this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0 && this.acc_mag_ts !== void 0 && this.acc_mag_bp_ts !== void 0 && this.configureACCGraph !== void 0) {
       const selected = evt.target.selectedIndex;
+      let title2 = "";
       this.acc_chart.stop();
       switch (selected) {
         case 0:
-          this.acc_chart.removeTimeSeries(this.acc_x_lp_ts);
-          this.acc_chart.removeTimeSeries(this.acc_y_lp_ts);
-          this.acc_chart.removeTimeSeries(this.acc_z_lp_ts);
-          this.acc_chart.removeTimeSeries(this.acc_rho_ts);
-          this.acc_chart.removeTimeSeries(this.acc_phi_ts);
-          this.acc_chart.removeTimeSeries(this.acc_theta_ts);
-          this.acc_chart.addTimeSeries(
-            this.acc_x_ts,
-            X_AXIS_PRESENTATION_OPTIONS
+          title2 = DEFAULT_ACC_LINE_CHART_OPTION.title?.text || title2;
+          this.configureACCGraph(
+            [this.acc_x_ts, this.acc_y_ts, this.acc_z_ts],
+            [X_AXIS_PRESENTATION_OPTIONS, Y_AXIS_PRESENTATION_OPTIONS, Z_AXIS_PRESENTATION_OPTIONS],
+            [acc_legend],
+            true,
+            this.ACC_MIN,
+            this.ACC_MAX,
+            title2,
+            false,
+            []
           );
-          this.acc_chart.addTimeSeries(
-            this.acc_y_ts,
-            Y_AXIS_PRESENTATION_OPTIONS
-          );
-          this.acc_chart.addTimeSeries(
-            this.acc_z_ts,
-            Z_AXIS_PRESENTATION_OPTIONS
-          );
-          this.acc_chart.options.minValue = this.ACC_MIN;
-          this.acc_chart.options.maxValue = this.ACC_MAX;
-          this.acc_chart.updateValueRange();
-          if (this.acc_chart.options.title) {
-            this.acc_chart.options.title.text = DEFAULT_ACC_LINE_CHART_OPTION.title?.text;
-          }
-          if (this.acc_chart.options.labels) {
-            this.acc_chart.options.labels.disabled = false;
-          }
-          this.acc_chart.options.horizontalLines = [];
-          if (this.acc_chart.removePostRenderCallback(acc_lp_legend).length || this.acc_chart.removePostRenderCallback(tilt_legend).length) {
-            this.acc_chart.addPostRenderCallback(acc_legend);
-            this.acc_chart.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (this.acc_chart) {
-                this.acc_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
           break;
         case 1:
-          this.acc_chart.removeTimeSeries(this.acc_x_ts);
-          this.acc_chart.removeTimeSeries(this.acc_y_ts);
-          this.acc_chart.removeTimeSeries(this.acc_z_ts);
-          this.acc_chart.removeTimeSeries(this.acc_rho_ts);
-          this.acc_chart.removeTimeSeries(this.acc_phi_ts);
-          this.acc_chart.removeTimeSeries(this.acc_theta_ts);
-          this.acc_chart.addTimeSeries(
-            this.acc_x_lp_ts,
-            X_LP_AXIS_PRESENTATION_OPTIONS
+          title2 = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
+          this.configureACCGraph(
+            [this.acc_x_lp_ts, this.acc_y_lp_ts, this.acc_z_lp_ts],
+            [X_LP_AXIS_PRESENTATION_OPTIONS, Y_LP_AXIS_PRESENTATION_OPTIONS, Z_LP_AXIS_PRESENTATION_OPTIONS],
+            [acc_lp_legend],
+            true,
+            this.ACC_MIN,
+            this.ACC_MAX,
+            title2,
+            false,
+            []
           );
-          this.acc_chart.addTimeSeries(
-            this.acc_y_lp_ts,
-            Y_LP_AXIS_PRESENTATION_OPTIONS
-          );
-          this.acc_chart.addTimeSeries(
-            this.acc_z_lp_ts,
-            Z_LP_AXIS_PRESENTATION_OPTIONS
-          );
-          this.acc_chart.options.minValue = this.ACC_MIN;
-          this.acc_chart.options.maxValue = this.ACC_MAX;
-          this.acc_chart.updateValueRange();
-          if (this.acc_chart.options.title) {
-            this.acc_chart.options.title.text = `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`;
-          }
-          if (this.acc_chart.options.labels) {
-            this.acc_chart.options.labels.disabled = false;
-          }
-          this.acc_chart.options.horizontalLines = [];
-          if (this.acc_chart.removePostRenderCallback(acc_legend).length || this.acc_chart.removePostRenderCallback(tilt_legend).length) {
-            this.acc_chart.addPostRenderCallback(acc_lp_legend);
-            this.acc_chart?.addPostRenderCallback(scroll_legend);
-            setTimeout(() => {
-              if (this.acc_chart) {
-                this.acc_chart.removePostRenderCallback(scroll_legend);
-              }
-            }, SCROLL_LEGENT_DISP_TIME_MS);
-          }
           break;
         case 2:
-          this.acc_chart.removeTimeSeries(this.acc_x_ts);
-          this.acc_chart.removeTimeSeries(this.acc_y_ts);
-          this.acc_chart.removeTimeSeries(this.acc_z_ts);
-          this.acc_chart.removeTimeSeries(this.acc_x_lp_ts);
-          this.acc_chart.removeTimeSeries(this.acc_y_lp_ts);
-          this.acc_chart.removeTimeSeries(this.acc_z_lp_ts);
-          this.acc_chart.addTimeSeries(
-            this.acc_rho_ts,
-            RHO_AXIS_PRESENTATION_OPTIONS
+          title2 = "Tilt angle [-90\xB0, 90\xB0] from lowpass on accelerometer raw";
+          this.configureACCGraph(
+            [this.acc_rho_ts, this.acc_phi_ts, this.acc_theta_ts],
+            [RHO_AXIS_PRESENTATION_OPTIONS, PHI_AXIS_PRESENTATION_OPTIONS, THETA_AXIS_PRESENTATION_OPTIONS],
+            [tilt_legend],
+            false,
+            -140,
+            140,
+            title2,
+            true,
+            [
+              { value: 90, color: "#ffffff7f", lineWidth: 1 },
+              { value: -90, color: "#ffffff7f", lineWidth: 1 }
+            ]
           );
-          this.acc_chart.addTimeSeries(
-            this.acc_phi_ts,
-            PHI_AXIS_PRESENTATION_OPTIONS
+          break;
+        case 3:
+          title2 = "Accelerometer raw magnitude";
+          this.configureACCGraph(
+            [this.acc_mag_ts],
+            [MAG_PRESENTATION_OPTIONS],
+            [acc_mag_legend],
+            false,
+            void 0,
+            void 0,
+            title2,
+            false,
+            []
           );
-          this.acc_chart.addTimeSeries(
-            this.acc_theta_ts,
-            THETA_AXIS_PRESENTATION_OPTIONS
+          break;
+        case 4:
+          title2 = `Bandpass (${AAC_MAG_BANDPASS_LOW_CUT_HZ}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ}Hz ${AAC_MAG_LOWPASS_ORDER}th order Butterworth) on accelerometer raw magnitude`;
+          this.configureACCGraph(
+            [this.acc_mag_bp_ts],
+            [MAG_LP_PRESENTATION_OPTIONS],
+            [acc_mag_bp_legend],
+            true,
+            this.ACC_MAG_BP_MIN,
+            this.ACC_MAG_BP_MAX,
+            title2,
+            false,
+            []
           );
-          this.acc_chart.options.minValue = -140;
-          this.acc_chart.options.maxValue = 140;
-          if (this.acc_chart.options.title) {
-            this.acc_chart.options.title.text = `Tilt angle [-90\xB0, 90\xB0] from lowpass on accelerometer raw`;
-          }
-          if (this.acc_chart.options.labels) {
-            this.acc_chart.options.labels.disabled = true;
-          }
-          this.acc_chart.options.horizontalLines = [
-            { value: 90, color: "#ffffff7f", lineWidth: 1 },
-            { value: -90, color: "#ffffff7f", lineWidth: 1 }
-          ];
-          if (this.acc_chart.removePostRenderCallback(acc_legend).length || this.acc_chart.removePostRenderCallback(acc_lp_legend).length) {
-            this.acc_chart.addPostRenderCallback(tilt_legend);
-          }
           break;
       }
       this.acc_chart.start();
@@ -2711,7 +2742,7 @@ var PolarVisRow = class _PolarVisRow {
     }
   }
   _newACCCallback(data) {
-    if (this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.acc_x_iir !== void 0 && this.acc_y_iir !== void 0 && this.acc_z_iir !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0) {
+    if (this.acc_x_ts !== void 0 && this.acc_y_ts !== void 0 && this.acc_z_ts !== void 0 && this.acc_x_lp_ts !== void 0 && this.acc_y_lp_ts !== void 0 && this.acc_z_lp_ts !== void 0 && data.prev_sample_timestamp_ms > 0 && data.samples !== void 0 && this.acc_x_iir !== void 0 && this.acc_y_iir !== void 0 && this.acc_z_iir !== void 0 && this.acc_rho_ts !== void 0 && this.acc_phi_ts !== void 0 && this.acc_theta_ts !== void 0 && this.acc_mag_ts !== void 0 && this.acc_mag_bp_ts !== void 0) {
       const numFrame = data.samples.length / 3;
       const estimated_sample_interval = (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
       const timeOffset = data.event_time_offset_ms + data.prev_sample_timestamp_ms + estimated_sample_interval;
@@ -2728,6 +2759,8 @@ var PolarVisRow = class _PolarVisRow {
         const rho = Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
         const phi = Math.atan(y_lp_d / Math.sqrt(x_lp_d * x_lp_d + z_lp_d * z_lp_d)) / Math.PI * 180;
         const theta = Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) / Math.PI * 180;
+        const acc_mag = Math.sqrt(x_d * x_d + y_d * y_d + z_d * z_d);
+        const acc_mag_bp = this.acc_mag_iir.singleStep(acc_mag);
         setTimeout(() => {
           this.acc_x_ts?.append(timestamp, x_d);
           this.acc_y_ts?.append(timestamp, y_d);
@@ -2738,18 +2771,15 @@ var PolarVisRow = class _PolarVisRow {
           this.acc_rho_ts?.append(timestamp, rho);
           this.acc_phi_ts?.append(timestamp, phi);
           this.acc_theta_ts?.append(timestamp, theta);
+          this.acc_mag_ts?.append(timestamp, acc_mag);
+          this.acc_mag_bp_ts?.append(timestamp, acc_mag_bp);
         }, plotDelay);
       }
     }
   }
   onWheelECG(ev) {
     if (this.ecg_chart !== void 0) {
-      let delta = 0;
-      if (ev.deltaY < 0) {
-        delta = 1;
-      } else if (ev.deltaY > 0) {
-        delta = -1;
-      }
+      const delta = ev.deltaY < 0 ? EXG_DELTA : -EXG_DELTA;
       switch (this.EXGFormSelect?.selectedIndex) {
         case 0:
           break;
@@ -2757,7 +2787,7 @@ var PolarVisRow = class _PolarVisRow {
           ev.preventDefault();
           this.EXG_HP_MAX += delta;
           this.EXG_HP_MIN -= delta;
-          if (this.EXG_HP_MAX < 5 || this.EXG_HP_MAX <= this.EXG_HP_MIN || this.EXG_HP_MAX / 2 > EXG_HP_MAX) {
+          if (this.EXG_HP_MAX < EXG_HP_SCROLL_MIN || this.EXG_HP_MAX <= this.EXG_HP_MIN || this.EXG_HP_MAX / SCROLL_MAX_LIMIT_FACTOR > EXG_HP_MAX) {
             this.EXG_HP_MAX -= delta;
             this.EXG_HP_MIN += delta;
           }
@@ -2767,7 +2797,7 @@ var PolarVisRow = class _PolarVisRow {
         case 2:
           ev.preventDefault();
           this.EXG_RMS_MAX += delta;
-          if (this.EXG_RMS_MAX < 5 || this.EXG_RMS_MAX <= this.EXG_RMS_MIN || this.EXG_RMS_MAX / 2 > EXG_RMS_MAX) {
+          if (this.EXG_RMS_MAX < EXG_RMS_SCROLL_MIN || this.EXG_RMS_MAX <= this.EXG_RMS_MIN || this.EXG_RMS_MAX / SCROLL_MAX_LIMIT_FACTOR > EXG_RMS_MAX) {
             this.EXG_RMS_MAX -= delta;
           }
           this.ecg_chart.options.maxValue = this.EXG_RMS_MAX;
@@ -2782,14 +2812,10 @@ var PolarVisRow = class _PolarVisRow {
         case 0:
         case 1:
           ev.preventDefault();
-          if (ev.deltaY < 0) {
-            delta = 10;
-          } else if (ev.deltaY > 0) {
-            delta = -10;
-          }
+          delta = ev.deltaY < 0 ? ACC_DELTA : -ACC_DELTA;
           this.ACC_MAX += delta;
           this.ACC_MIN -= delta;
-          if (this.ACC_MAX < 100 || this.ACC_MAX <= this.ACC_MIN || this.ACC_MAX / 2 > ACC_MAX) {
+          if (this.ACC_MAX < ACC_SCROLL_MIN || this.ACC_MAX <= this.ACC_MIN || this.ACC_MAX / SCROLL_MAX_LIMIT_FACTOR > ACC_MAX) {
             this.ACC_MAX -= delta;
             this.ACC_MIN += delta;
           }
@@ -2797,11 +2823,58 @@ var PolarVisRow = class _PolarVisRow {
           this.acc_chart.options.maxValue = this.ACC_MAX;
           break;
         case 2:
+        case 3:
+          break;
+        case 4:
+          ev.preventDefault();
+          delta = ev.deltaY < 0 ? ACC_MAG_DELTA : -ACC_MAG_DELTA;
+          this.ACC_MAG_BP_MAX += delta;
+          this.ACC_MAG_BP_MIN -= delta;
+          if (this.ACC_MAG_BP_MAX < ACC_MAG_SCROLL_MIN || this.ACC_MAG_BP_MAX <= this.ACC_MIN || this.ACC_MAG_BP_MAX / SCROLL_MAX_LIMIT_FACTOR > ACC_MAG_BP_MAX) {
+            this.ACC_MAG_BP_MAX -= delta;
+            this.ACC_MAG_BP_MIN += delta;
+          }
+          this.acc_chart.options.minValue = this.ACC_MAG_BP_MIN;
+          this.acc_chart.options.maxValue = this.ACC_MAG_BP_MAX;
           break;
       }
     }
   }
 };
+function configTSforChartGen(chart, allTimeserieses, allPostRenderCallbacks) {
+  return (showTimeserieses, showTimeserieOptions, showPastRenderCallbacks = [], scrollable = false, minValue = void 0, maxValue = void 0, titleText = "", disableLabel = false, horizontalLines = []) => {
+    for (let i = 0; i < allTimeserieses.length; i++) {
+      chart.removeTimeSeries(allTimeserieses[i]);
+    }
+    for (let i = 0; i < allPostRenderCallbacks.length; i++) {
+      chart.removePostRenderCallback(allPostRenderCallbacks[i]);
+    }
+    for (let i = 0; i < showTimeserieses.length; i++) {
+      chart.addTimeSeries(showTimeserieses[i], showTimeserieOptions[i]);
+    }
+    for (let i = 0; i < showPastRenderCallbacks.length; i++) {
+      chart.addPostRenderCallback(showPastRenderCallbacks[i]);
+    }
+    if (scrollable) {
+      chart.addPostRenderCallback(scroll_legend);
+      setTimeout(() => {
+        if (chart) {
+          chart.removePostRenderCallback(scroll_legend);
+        }
+      }, SCROLL_LEGENT_DISP_TIME_MS);
+    }
+    chart.options.minValue = minValue;
+    chart.options.maxValue = maxValue;
+    chart.updateValueRange();
+    if (titleText.length > 0 && chart.options.title !== void 0) {
+      chart.options.title.text = titleText;
+    }
+    if (chart.options.labels !== void 0) {
+      chart.options.labels.disabled = disableLabel;
+    }
+    chart.options.horizontalLines = horizontalLines;
+  };
+}
 function resizeSmoothieGen(chart, widthRatio, heightRatio, verbose = false) {
   const resize = () => {
     const canvas = chart.canvas;
@@ -2890,6 +2963,32 @@ function exg_hp_legend(canvas, time) {
       ctx.fillStyle = EXG_HP_PRESENTATION_OPTIONS.strokeStyle;
     }
     ctx.fillText(`\u2015 Highpass raw EXG (\u03BCV)`, 10, 5);
+    ctx.restore();
+  }
+}
+function acc_mag_legend(canvas, time) {
+  const ctx = canvas.getContext("2d");
+  if (ctx !== null) {
+    ctx.save();
+    ctx.textBaseline = "top";
+    ctx.font = "14px Arial";
+    if (MAG_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+      ctx.fillStyle = MAG_PRESENTATION_OPTIONS.strokeStyle;
+    }
+    ctx.fillText(`\u2015 Accelerometer magnitude (mG)`, 10, 5);
+    ctx.restore();
+  }
+}
+function acc_mag_bp_legend(canvas, time) {
+  const ctx = canvas.getContext("2d");
+  if (ctx !== null) {
+    ctx.save();
+    ctx.textBaseline = "top";
+    ctx.font = "14px Arial";
+    if (MAG_LP_PRESENTATION_OPTIONS.strokeStyle !== void 0) {
+      ctx.fillStyle = MAG_LP_PRESENTATION_OPTIONS.strokeStyle;
+    }
+    ctx.fillText(`\u2015 Bandpass accelerometer magnitude (mG)`, 10, 5);
     ctx.restore();
   }
 }
