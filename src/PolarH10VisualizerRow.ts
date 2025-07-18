@@ -1172,18 +1172,15 @@ class PolarVisRow {
         const x_lp_d = this.acc_x_iir.singleStep(x_d);
         const y_lp_d = this.acc_y_iir.singleStep(y_d);
         const z_lp_d = this.acc_z_iir.singleStep(z_d);
+        const x_lp_d_2 = x_lp_d * x_lp_d;
+        const y_lp_d_2 = y_lp_d * y_lp_d;
+        const z_lp_d_2 = z_lp_d * z_lp_d;
         const rho =
-          (Math.atan(x_lp_d / Math.sqrt(y_lp_d * y_lp_d + z_lp_d * z_lp_d)) /
-            Math.PI) *
-          180;
+          (Math.atan(x_lp_d / Math.sqrt(y_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
         const phi =
-          (Math.atan(y_lp_d / Math.sqrt(x_lp_d * x_lp_d + z_lp_d * z_lp_d)) /
-            Math.PI) *
-          180;
+          (Math.atan(y_lp_d / Math.sqrt(x_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
         const theta =
-          (Math.atan(Math.sqrt(x_lp_d * x_lp_d + y_lp_d * y_lp_d) / z_lp_d) /
-            Math.PI) *
-          180;
+          (Math.atan(Math.sqrt(x_lp_d_2 + y_lp_d_2) / z_lp_d) / Math.PI) * 180;
         const acc_mag = Math.sqrt(x_d * x_d + y_d * y_d + z_d * z_d);
         const acc_mag_bp = this.acc_mag_iir.singleStep(acc_mag);
         setTimeout(() => {
@@ -1382,6 +1379,31 @@ function createSwitch(
   label.appendChild(input);
   label.appendChild(icon);
   return label;
+}
+
+function addLegendGen(
+  canvas: HTMLCanvasElement,
+  time: number,
+  legend: string,
+  x: number,
+  y: number,
+  textBaseline: CanvasTextBaseline = "top",
+  textAligh: CanvasTextAlign = "center",
+  font: string = "16px Arial",
+  fillStyle = "#fbfbfb",
+) {
+  return (canvas: HTMLCanvasElement, time: number) => {
+    const ctx = canvas.getContext("2d");
+    if (ctx !== null) {
+      ctx.save();
+      ctx.textBaseline = textBaseline;
+      ctx.textAlign = textAligh;
+      ctx.font = font;
+      ctx.fillStyle = fillStyle;
+      ctx.fillText(legend, x / window.devicePixelRatio / 2, y);
+      ctx.restore();
+    }
+  };
 }
 
 function scroll_legend(canvas: HTMLCanvasElement, time: number) {

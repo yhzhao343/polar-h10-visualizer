@@ -13,26 +13,26 @@ export class CustomSmoothie extends SmoothieChart {
 
   override render(canvas, time) {
     super.render(canvas, time);
-    for (let callback of this.postRender) {
-      callback(canvas, time);
+    for (let i = 0; i < this.postRender.length; i++) {
+      this.postRender[i](canvas, time);
     }
   }
 
-  addPostRenderCallback = function (callback: PostRenderCallback) {
+  addPostRenderCallback(callback: PostRenderCallback) {
     const i = this.postRender.indexOf(callback);
     if (i < 0) {
       this.postRender.push(callback);
     }
-  };
-  removePostRenderCallback = function (callback: PostRenderCallback) {
+  }
+  removePostRenderCallback(callback: PostRenderCallback) {
     const i = this.postRender.indexOf(callback);
     if (i > -1) {
       return this.postRender.splice(i, 1);
     } else {
       return [];
     }
-  };
-  clearPostRenderCallback = function (callback: PostRenderCallback) {
+  }
+  clearPostRenderCallback() {
     this.postRender = [];
-  };
+  }
 }
