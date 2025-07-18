@@ -1,5 +1,5 @@
 import { SmoothieChart, IChartOptions } from "smoothie";
-type PostRenderCallback = (
+export type PostRenderCallback = (
   canvas: HTMLCanvasElement,
   timestamp: number,
 ) => void;
@@ -32,44 +32,7 @@ export class CustomSmoothie extends SmoothieChart {
       return [];
     }
   };
+  clearPostRenderCallback = function (callback: PostRenderCallback) {
+    this.postRender = [];
+  };
 }
-
-// declare class CustomSmoothie extends SmoothieChart {
-//   addPostRenderCallback(callback: PostRenderCallback);
-//   removePostRenderCallback(callback: PostRenderCallback);
-// }
-
-// function CustomSmoothie(option?) {
-//   SmoothieChart.call(this, option);
-//   this.postRender = [];
-// }
-// CustomSmoothie.prototype = Object.create(SmoothieChart.prototype);
-// CustomSmoothie.prototype.constructor = CustomSmoothie;
-// CustomSmoothie.prototype.render = function (canvas, time) {
-//   SmoothieChart.prototype.render.call(this, canvas, time);
-//   for (let callback of this.postRender) {
-//     callback(canvas, time);
-//   }
-// };
-
-// CustomSmoothie.prototype.addPostRenderCallback = function (
-//   callback: PostRenderCallback,
-// ) {
-//   const i = this.postRender.indexOf(callback);
-//   if (i < 0) {
-//     this.postRender.push(callback);
-//   }
-// };
-
-// CustomSmoothie.prototype.removePostRenderCallback = function (
-//   callback: PostRenderCallback,
-// ) {
-//   const i = this.postRender.indexOf(callback);
-//   if (i > -1) {
-//     return this.postRender.splice(i, 1);
-//   } else {
-//     return [];
-//   }
-// };
-
-// export CustomSmoothie

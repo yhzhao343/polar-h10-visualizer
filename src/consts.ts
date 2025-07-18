@@ -41,7 +41,8 @@ export const ERROR_MSGS = [
   "DEVICE IN CHARGER",
 ];
 
-export const LOW_BATT_LVL = 40;
+export const SCROLL_MAX_LIMIT_FACTOR = 5;
+export const LOW_BATT_LVL = 35;
 
 export const EXG_STREAM_DELAY_MS = 600;
 export const EXG_RMS_WINDOW_MS = 200;
@@ -53,7 +54,9 @@ export const EXG_RMS_MAX = 120;
 export const EXG_RMS_HIGHPASS_CUTOFF_HZ = 25;
 export const EXG_RMS_HIGHPASS_ORDER = 4;
 export const EXG_SAMPLE_RATE_HZ = 130;
-// export const ACC_;
+export const EXG_HP_SCROLL_MIN = 5;
+export const EXG_RMS_SCROLL_MIN = 5;
+export const EXG_DELTA = 1;
 
 export const ACC_STREAM_DELAY_MS = 600;
 export const ACC_SAMPLE_RATE_HZ = 100;
@@ -63,6 +66,16 @@ export const ACC_MAX = 2000;
 export const AAC_LOWPASS_CUTOFF_HZ = 10;
 export const AAC_LOWPASS_ORDER = 4;
 export const SCROLL_LEGENT_DISP_TIME_MS = 1500;
+export const ACC_DELTA = 10;
+export const ACC_SCROLL_MIN = 100;
+
+export const AAC_MAG_BANDPASS_HIGH_CUT_HZ = 2.5;
+export const AAC_MAG_BANDPASS_LOW_CUT_HZ = 0.1;
+export const AAC_MAG_LOWPASS_ORDER = 4;
+export const ACC_MAG_BP_MIN = -20;
+export const ACC_MAG_BP_MAX = 20;
+export const ACC_MAG_DELTA = 1;
+export const ACC_MAG_SCROLL_MIN = 1;
 
 export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
   // limitFPS: 60,
@@ -188,6 +201,18 @@ export const THETA_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   strokeStyle: "#ffff78cc",
 };
 
+export const MAG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#ffdcaacc",
+};
+
+export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#dcaaffcc",
+};
+
 export enum PolarSensorType {
   ECG = 0,
   PPG = 1,
@@ -213,3 +238,12 @@ export interface PolarH10Data {
   recv_epoch_time_ms: number;
   event_time_offset_ms: number;
 }
+
+export const EXG_DATA_OPTIONS = [
+  "Raw", `${EXG_RMS_HIGHPASS_CUTOFF_HZ.toFixed(0)}Hz Highpass`, "RMS"
+];
+export const ACC_DATA_OPTIONS = [
+  "Raw", `${AAC_LOWPASS_CUTOFF_HZ.toFixed(0)}Hz Lowpass`,
+  "Tilt", "Magnitude",
+  `${AAC_MAG_BANDPASS_LOW_CUT_HZ.toFixed(1)}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ.toFixed(1)}Hz mag`
+];
