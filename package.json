@@ -17,12 +17,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "add-coi": "esbuild node_modules/coi-serviceworker/coi-serviceworker.js --minify --outfile=./src/coi-serviceworker.min.js && cp ./src/coi-serviceworker.min.js ./build/coi-serviceworker.min.js",
-    "cp-file": "mkdir -p build && cp src/index.html build/ && cp src/style.css build/ && cp src/favicon.ico build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre.min.css build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre-icons.min.css build/",
+    "download-font": "wget -O src/styles/google-material-icon.woff2 --no-clobber https://fonts.gstatic.com/s/materialicons/v143/flUhRq6tzZclQEJ-Vdg-IuiaDsNc.woff2",
+    "cp-file": "npm run download-font ; mkdir -p build && cp src/index.html build/ && cp -r src/styles build/ && cp src/favicon.ico build/ && cp node_modules/@spectre-org/spectre-css/dist/spectre.min.css build/styles/ && cp node_modules/@spectre-org/spectre-css/dist/spectre-icons.min.css build/styles",
     "dev": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:window.IS_PRODUCTION=false --watch --servedir=build --allow-overwrite --format=esm",
-    "build": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:window.IS_PRODUCTION=true --allow-overwrite --format=esm",
+    "build": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:window.IS_PRODUCTION=true --allow-overwrite --format=esm --minify",
     "serve": "esbuild --servedir=build",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "clean": "rm -r build"
   },
   "dependencies": {
     "@spectre-org/spectre-css": "^1.2.0",

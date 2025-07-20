@@ -107,6 +107,7 @@ class PolarVisRow {
   bodypartSelectDiv: HTMLDivElement;
   bodypartSelect: HTMLSelectElement;
   dataCtrl: HTMLDivElement;
+  extraDataCtrl: HTMLDivElement;
   rowOrder: HTMLDivElement;
   visContainerDiv: HTMLDivElement;
   EXGCtrlDiv: HTMLDivElement;
@@ -122,8 +123,11 @@ class PolarVisRow {
   ACC_MAG_BP_MIN: number = ACC_MAG_BP_MIN;
   ACC_MAG_BP_MAX: number = ACC_MAG_BP_MAX;
 
+  disBtn: HTMLButtonElement;
   orderUpBtn: HTMLButtonElement;
   orderDownBtn: HTMLButtonElement;
+  show3DBtn: HTMLButtonElement;
+  filterConfigBtn: HTMLButtonElement;
   EXGFormSelect: HTMLSelectElement;
   EXGSwitchInput: HTMLInputElement;
   EXGDropDown: HTMLDivElement;
@@ -171,9 +175,6 @@ class PolarVisRow {
   configureEXGGraph: ConfigGraphCallback | undefined = undefined;
   configureACCGraph: ConfigGraphCallback | undefined = undefined;
 
-  newECGCallback: (data: PolarH10Data) => void;
-  newACCCallback: (data: PolarH10Data) => void;
-
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
       throw new Error("Invalid Bluetooth device! Missing name");
@@ -181,76 +182,9 @@ class PolarVisRow {
     this.parent = content;
     this.device = device;
     this.deviceName = this.device?.name?.substring(10) || "";
-    this.newECGCallback = this._newECGCallback.bind(this);
-    this.newACCCallback = this._newACCCallback.bind(this);
   }
 
-  async init() {
-    try {
-      await this.initPolarH10();
-      await this.initDeviceInfo();
-      await this.initDeviceGraphCtrl();
-      PolarVisRow.polarRowID += 1;
-      PolarVisRow.polarVisRows.push(this);
-    } catch (err) {
-      this.disconnectPolarH10();
-      alert(err);
-    }
-  }
-
-  private removeSelf() {
-    if (this.parent.contains(this.polarSensorDiv)) {
-      this.parent.removeChild(this.polarSensorDiv);
-    }
-    const myInd = PolarVisRow.polarVisRows.indexOf(this);
-    if (myInd > -1) {
-      PolarVisRow.polarVisRows.splice(myInd, 1);
-      if (PolarVisRow.polarVisRows.length > 0) {
-        if (myInd === PolarVisRow.polarVisRows.length) {
-          PolarVisRow.polarVisRows[myInd - 1].orderDownBtn.disabled = true;
-        } else if (myInd === 0) {
-          PolarVisRow.polarVisRows[0].orderUpBtn.disabled = true;
-        }
-        PolarVisRow.reOrderRows();
-      }
-    }
-  }
-  private static reOrderRows() {
-    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-      const row = PolarVisRow.polarVisRows[i];
-      row.order = i;
-      row.polarSensorDiv.style.order = i.toString();
-    }
-  }
-
-  private async initPolarH10() {
-    this.polarSensorDiv = createDiv(`polarSensorDiv`, this.parent, [
-      "polar-sensor-row",
-      "flexbox",
-    ]);
-    this.optionDiv = createDiv(`optionDiv`, this.polarSensorDiv, [
-      "polar-sensor-left-panel",
-      "center",
-    ]);
-    this.order = PolarVisRow.polarVisRows.length;
-    this.polarSensorDiv.style.order = this.order.toString();
-
-    this.nameDiv = createDiv(
-      `device-name-batt`,
-      this.optionDiv,
-      ["center", "flexbox"],
-      `Conneting ${this.deviceName}...`,
-    );
-    this.loadingDiv = createDiv("ConnectLoading", this.optionDiv, [
-      "loading",
-      "loading-lg",
-      "full-width",
-      "flexbox",
-    ]);
-    await this.initPolarH10IfUnique();
-  }
-
-  async disconnectPolarH10(ev: any = undefined) {
+  disconnectPolarH10 = async (ev: any = undefined) => {
     this.removeSelf();
     if (this.ecg_chart !== undefined) {
       this.ecg_chart.stop();
@@ -282,264 +216,20 @@ class PolarVisRow {
     this.disconnectPolarH10IfAlone();
   }
 
-  static includesDuplicate(
-    self: PolarVisRow,
-    key: string = "device",
-    conditionCallback: ConditionChecker | undefined = undefined,
-  ): number {
-    let duplicateInd = -1;
-    if (conditionCallback !== undefined) {
-      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-        let row = PolarVisRow.polarVisRows[i];
-        if (row !== self && row[key] === self[key] && conditionCallback(row)) {
-          duplicateInd = i;
-          break;
-        }
-      }
-    } else {
-      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-        let row = PolarVisRow.polarVisRows[i];
-        if (row !== self && row[key] === self[key]) {
-          duplicateInd = i;
-          break;
-        }
-      }
-    }
-
-    return duplicateInd;
-  }
-
-  disconnectPolarH10IfAlone() {
-    if (PolarVisRow.includesDuplicate(this, "device") === -1) {
-      this.device.gatt?.disconnect();
+  async init() {
+    try {
+      await this.initPolarH10();
+      await this.initDeviceInfo();
+      await this.initDeviceGraphCtrl();
+      PolarVisRow.polarRowID += 1;
+      PolarVisRow.polarVisRows.push(this);
+    } catch (err) {
+      this.disconnectPolarH10();
+      alert(err);
     }
   }
 
-  async initPolarH10IfUnique() {
-    const duplicateInd = PolarVisRow.includesDuplicate(this, "device");
-    if (duplicateInd < 0) {
-      try {
-        this.polarH10 = new PolarH10(this.device);
-        await this.polarH10.init();
-      } catch (err) {
-        console.log(err);
-        throw new Error("polarH10 device initialization failed!");
-      }
-    } else {
-      this.polarH10 = PolarVisRow.polarVisRows[duplicateInd].polarH10;
-    }
-  }
-
-  resetECG() {
-    this.ecg_canvas = undefined;
-    this.ECGDiv = undefined;
-    this.ecg_resize = undefined;
-    this.ecg_ss_win = undefined;
-    this.ecg_chart = undefined;
-    this.ecg_ts = undefined;
-    this.ecg_hp_ts = undefined;
-    this.ecg_rms_ts = undefined;
-    this.ecg_resize_observer = undefined;
-    this.ecg_rms_iir_coef = undefined;
-    this.ecg_rms_iir = undefined;
-    this.ecg_ss_win_i = 0;
-    this.ecg_ss = 0;
-    this.configureEXGGraph = undefined;
-  }
-
-  resetACC() {
-    this.ACCDiv = undefined;
-    this.acc_resize = undefined;
-    this.acc_canvas = undefined;
-    this.acc_chart = undefined;
-    this.acc_x_ts = undefined;
-    this.acc_y_ts = undefined;
-    this.acc_z_ts = undefined;
-    this.acc_resize_observer = undefined;
-    this.acc_iir_coef = undefined;
-    this.acc_mag_iir_coef = undefined;
-    this.acc_x_iir = undefined;
-    this.acc_y_iir = undefined;
-    this.acc_z_iir = undefined;
-    this.acc_x_lp_ts = undefined;
-    this.acc_y_lp_ts = undefined;
-    this.acc_z_lp_ts = undefined;
-    this.acc_mag_iir = undefined;
-    this.acc_rho_ts = undefined;
-    this.acc_phi_ts = undefined;
-    this.acc_theta_ts = undefined;
-    this.acc_mag_ts = undefined;
-    this.acc_mag_bp_ts = undefined;
-    this.configureACCGraph = undefined;
-  }
-
-  private async initDeviceInfo() {
-    this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
-      "device-info",
-    ]);
-
-    this.disconnectDiv = createDiv("disconnectDiv", undefined, [
-      "flexbox",
-      "disconnect",
-    ]);
-
-    const disBtn = document.createElement("button");
-    const delIcon = document.createElement("i");
-    delIcon.classList.add("icon", "icon-delete");
-    disBtn.appendChild(delIcon);
-
-    disBtn.setAttribute("data-tooltip", "disconnect");
-    disBtn.classList.add(
-      "btn",
-      "btn-primary",
-      "btn-sm",
-      "s-circle",
-      "tooltip",
-      "tooltip-top",
-    );
-    this.disconnectDiv.appendChild(disBtn);
-    disBtn.onclick = this.disconnectPolarH10.bind(this);
-
-    this.battLvl = await this.polarH10.getBatteryLevel();
-    this.optionDiv.removeChild(this.loadingDiv);
-    this.optionDiv.removeChild(this.nameDiv);
-    this.optionDiv.classList.remove("center");
-
-    this.nameDiv.textContent = "";
-    this.nameDiv.classList.add("flex");
-    this.deviceNameDiv = createDiv(
-      "devicename",
-      this.nameDiv,
-      ["padright-5px", "flexbox"],
-      this.deviceName,
-    );
-
-    let battStr: string;
-    if (this.battLvl > LOW_BATT_LVL) {
-      battStr = `🔋${this.battLvl}%`;
-    } else {
-      battStr = `🪫${this.battLvl}%`;
-    }
-    this.battLvlDiv = createDiv(
-      "battLvl",
-      this.nameDiv,
-      ["flexbox", "mid-text"],
-      battStr,
-    );
-    this.nameDiv.classList.add("flexbox");
-    this.deviceInfoDiv.appendChild(this.disconnectDiv);
-    this.deviceInfoDiv.appendChild(this.nameDiv);
-    this.optionDiv.appendChild(this.deviceInfoDiv);
-
-    this.dataInfo = createDiv("dataInfo", this.deviceInfoDiv, ["data-info"]);
-
-    this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
-
-    this.orderUpBtn = document.createElement("button");
-    const orderUpIcon = document.createElement("i");
-    orderUpIcon.classList.add("icon", "icon-arrow-up");
-    this.orderUpBtn.appendChild(orderUpIcon);
-
-    this.orderUpBtn.setAttribute("data-tooltip", "Move up");
-    this.orderUpBtn.classList.add(
-      "btn",
-      "btn-primary",
-      "btn-sm",
-      "tooltip",
-      "tooltip-right",
-    );
-    this.rowOrder.appendChild(this.orderUpBtn);
-    this.orderUpBtn.disabled = PolarVisRow.polarVisRows.length < 1;
-    this.orderUpBtn.onclick = this.moveUp.bind(this);
-
-    this.orderDownBtn = document.createElement("button");
-    const orderDownIcon = document.createElement("i");
-    orderDownIcon.classList.add("icon", "icon-arrow-down");
-    this.orderDownBtn.appendChild(orderDownIcon);
-
-    this.orderDownBtn.setAttribute("data-tooltip", "Move down");
-    this.orderDownBtn.classList.add(
-      "btn",
-      "btn-primary",
-      "btn-sm",
-      "tooltip",
-      "tooltip-right",
-    );
-    this.rowOrder.appendChild(this.orderDownBtn);
-    this.orderDownBtn.disabled = true;
-
-    if (PolarVisRow.polarVisRows.length > 0) {
-      PolarVisRow.polarVisRows[
-        PolarVisRow.polarVisRows.length - 1
-      ].orderDownBtn.disabled = false;
-    }
-    this.orderDownBtn.onclick = this.moveDown.bind(this);
-
-    this.bodypartLabel = createDiv(
-      "bodypartLabel",
-      this.dataInfo,
-      ["bodypart-text"],
-      "Bodypart:",
-    );
-
-    this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
-      "bodypart-select",
-    ]);
-
-    this.bodypartSelect = createSelect(
-      "bodypartSelect",
-      this.bodypartSelectDiv,
-      ["form-select", "dark-select", "select-sm", "almost-full-width"],
-      "",
-      BODY_PARTS,
-      getPolarRowId,
-    );
-
-    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, ["data-ctrl"]);
-    this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
-      "full-width-height",
-    ]);
-  }
-
-  private async initDeviceGraphCtrl() {
-    this.EXGCtrlDiv = createDiv("EXGCtrlDiv", this.dataCtrl, ["half-width"]);
-    const EXG_switch = createSwitch("EXG", this.onToggleECG.bind(this));
-    this.EXGCtrlDiv.appendChild(EXG_switch);
-    this.EXGSwitchInput = EXG_switch.children.item(0) as HTMLInputElement;
-    this.EXGDropDown = createDiv("EXGDropDownDiv", this.EXGCtrlDiv, [
-      "form-group",
-    ]);
-    this.EXGFormSelect = createSelect(
-      "EXGFormSelect",
-      this.EXGDropDown,
-      ["form-select", "dark-select", "select-sm", "almost-full-width"],
-      "",
-      EXG_DATA_OPTIONS,
-    );
-    this.EXGFormSelect.selectedIndex = 0;
-    this.EXGFormSelect.onchange = this.changeEXGGraph.bind(this);
-    this.EXGFormSelect.disabled = true;
-
-    this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
-    const ACC_switch = createSwitch("ACC", this.onToggleACC.bind(this));
-    this.ACCCtrlDiv.appendChild(ACC_switch);
-    this.ACCSwitchInput = ACC_switch.children.item(0) as HTMLInputElement;
-    this.ACCDropDown = createDiv("ACCDropDownDiv", this.ACCCtrlDiv, [
-      "form-group",
-    ]);
-    this.ACCFormSelect = createSelect(
-      "ACCFormSelect",
-      this.ACCDropDown,
-      ["form-select", "dark-select", "select-sm", "almost-full-width"],
-      "",
-      ACC_DATA_OPTIONS,
-    );
-    this.ACCFormSelect.selectedIndex = 0;
-    this.ACCFormSelect.onchange = this.changeACCGraph.bind(this);
-    this.ACCFormSelect.disabled = true;
-  }
-
-  moveUp(ev: any) {
+  moveUp = (ev: any) => {
     this.order -= 1;
     this.polarSensorDiv.style.order = this.order.toString();
     const prevRow = PolarVisRow.polarVisRows[this.order];
@@ -560,7 +250,7 @@ class PolarVisRow {
     }
   }
 
-  moveDown(ev: any) {
+  moveDown = (ev: any) => {
     this.order += 1;
     this.polarSensorDiv.style.order = this.order.toString();
     const nextRow = PolarVisRow.polarVisRows[this.order];
@@ -582,336 +272,122 @@ class PolarVisRow {
     }
   }
 
-  async startECG(
-    sampleRate: number = EXG_SAMPLE_RATE_HZ,
-    addCallback: boolean = true,
-  ) {
-    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
-    if (duplicateInd < 0) {
-      try {
-        const startECGReply = await this.polarH10.startECG(sampleRate);
-        if (
-          startECGReply?.error === "SUCCESS" ||
-          startECGReply?.error === "ALREADY IN STATE"
-        ) {
-          if (addCallback) {
-            this.polarH10.addEventListener("ECG", this.newECGCallback);
+  newECGCallback = (data: PolarH10Data) => {
+    if (
+      this.ecg_ts !== undefined &&
+      this.ecg_rms_ts !== undefined &&
+      this.ecg_hp_ts !== undefined &&
+      data.prev_sample_timestamp_ms > 0 &&
+      data.samples !== undefined &&
+      this.ecg_rms_iir !== undefined
+    ) {
+      const estimated_sample_interval =
+        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
+        data.samples.length;
+      const timeOffset =
+        data.event_time_offset_ms +
+        data.prev_sample_timestamp_ms +
+        estimated_sample_interval;
+
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const plotDelay = s_i * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const sample_i = (data.samples as Int32Array)[s_i];
+        const filtered_sample_i = this.ecg_rms_iir.singleStep(sample_i);
+        const filtered_sample_squared_i = filtered_sample_i * filtered_sample_i;
+        let data_rms_i: number | undefined = undefined;
+        if (this.ecg_ss_win !== undefined) {
+          this.ecg_ss += filtered_sample_squared_i;
+          if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
+            this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
+            this.ecg_ss_win_i++;
+          } else {
+            this.ecg_ss -= this.ecg_ss_win[0];
+            this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
+            this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] =
+              filtered_sample_squared_i;
           }
-        } else {
-          console.log(startECGReply);
-          this.disconnectPolarH10();
-        }
-      } catch (e) {
-        alert(e);
-        this.disconnectPolarH10();
-      }
-    } else {
-      this.polarH10.addEventListener("ECG", this.newECGCallback);
-    }
-  }
-
-  async stopECG() {
-    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
-    if (duplicateInd < 0) {
-      try {
-        const stopECGReply = await this.polarH10.stopECG();
-        if (stopECGReply) {
-          console.log(stopECGReply);
-        }
-      } catch (e) {
-        console.log(e);
-        alert(e);
-      }
-    }
-  }
-
-  async startACC(
-    range: number = ACC_RANGE_G,
-    sampleRate: number = ACC_SAMPLE_RATE_HZ,
-    addCallback: boolean = true,
-  ) {
-    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
-    if (duplicateInd < 0) {
-      try {
-        const startACCReply = await this.polarH10.startACC(range, sampleRate);
-        if (
-          startACCReply?.error === "SUCCESS" ||
-          startACCReply?.error === "ALREADY IN STATE"
-        ) {
-          if (addCallback) {
-            this.polarH10.addEventListener("ACC", this.newACCCallback);
-          }
-        } else {
-          console.log(startACCReply);
-          this.disconnectPolarH10();
-        }
-      } catch (e) {
-        alert(e);
-        this.disconnectPolarH10();
-      }
-    } else {
-      this.polarH10.addEventListener("ACC", this.newACCCallback);
-    }
-  }
-
-  async stopAcc() {
-    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
-    if (duplicateInd < 0) {
-      try {
-        const stopACCReply = await this.polarH10.stopACC();
-        if (stopACCReply) {
-          console.log(stopACCReply);
-        }
-      } catch (e) {
-        console.log(e);
-        alert(e);
-      }
-    }
-  }
-
-  ECGIsOn() {
-    return this.ECGDiv !== undefined;
-  }
-
-  ACCIsOn() {
-    return this.ACCDiv !== undefined;
-  }
-
-  async onToggleECG(ev: any) {
-    this.ACCSwitchInput.disabled = true;
-
-    if (ev.target?.checked) {
-      let width_class: string;
-      if (this.ACCDiv === undefined) {
-        width_class = "full-width";
-      } else {
-        width_class = "half-width";
-        this.ACCDiv.classList.remove("full-width");
-        this.ACCDiv.classList.add("half-width");
-        this.visContainerDiv.removeChild(this.ACCDiv);
-      }
-      this.ECGDiv = createDiv("ECGDiv", this.visContainerDiv, [
-        "float-left",
-        "almost-full-height",
-        width_class,
-      ]);
-      this.ECGDiv.addEventListener("wheel", this.onWheelECG.bind(this));
-      if (this.ACCDiv !== undefined) {
-        this.visContainerDiv.appendChild(this.ACCDiv);
-      }
-      this.ecg_canvas = createCanvas("ecg_canvas", this.ECGDiv);
-
-      this.ecg_chart = new CustomSmoothie(DEFAULT_EXG_LINE_CHART_OPTION);
-      this.ecg_ts = new TimeSeries();
-      this.ecg_chart.addTimeSeries(this.ecg_ts, EXG_PRESENTATION_OPTIONS);
-      this.ecg_chart.streamTo(this.ecg_canvas, EXG_STREAM_DELAY_MS);
-      this.ecg_rms_ts = new TimeSeries();
-      this.ecg_hp_ts = new TimeSeries();
-      this.ecg_chart.addPostRenderCallback(exg_legend);
-      this.ecg_ss_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
-      this.ecg_ss_win_i = 0;
-      this.ecg_ss = 0;
-
-      this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
-      this.ecg_resize_observer = new ResizeObserver((entries) => {
-        for (let entry of entries) {
-          if (entry.target === this.ECGDiv && this.ecg_resize !== undefined) {
-            this.ecg_resize();
+          if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
+            data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
           }
         }
-      });
-      this.ecg_resize_observer.observe(this.ECGDiv);
-      this.ecg_rms_iir_coef = IIRCalc.highpass({
-        order: EXG_RMS_HIGHPASS_ORDER,
-        characteristic: "butterworth",
-        Fs: EXG_SAMPLE_RATE_HZ,
-        Fc: EXG_RMS_HIGHPASS_CUTOFF_HZ,
-        preGain: false,
-      });
-      this.ecg_rms_iir = IirFilter(this.ecg_rms_iir_coef);
-      this.ecg_resize();
-
-      if (this.EXGFormSelect !== undefined) {
-        this.EXGFormSelect.disabled = false;
-        this.EXGFormSelect.selectedIndex = 0;
-      }
-
-      this.configureEXGGraph = configTSforChartGen(
-        this.ecg_chart,
-        [this.ecg_ts, this.ecg_rms_ts, this.ecg_hp_ts],
-        [exg_legend, exg_rms_legend, exg_hp_legend],
-      );
-
-      await this.startECG(EXG_SAMPLE_RATE_HZ);
-    } else {
-      if (
-        this.ECGDiv !== undefined &&
-        this.ecg_canvas !== undefined &&
-        this.ecg_chart !== undefined
-      ) {
-        this.ecg_chart.stop();
-        if (this.EXGFormSelect !== undefined) {
-          this.EXGFormSelect.disabled = true;
-          this.EXGFormSelect.selectedIndex = 0;
-        }
-        if (this.ECGDiv.contains(this.ecg_canvas)) {
-          this.ACCDiv?.classList.remove("half-width");
-          this.ACCDiv?.classList.add("full-width");
-          await this.stopECG();
-          this.visContainerDiv.removeChild(this.ECGDiv);
-          this.ecg_resize_observer?.disconnect();
-          this.polarH10.removeEventListener("ECG", this.newECGCallback);
-          this.resetECG();
-        }
-      }
-    }
-    if (this.ACCSwitchInput) {
-      this.ACCSwitchInput.disabled = false;
-    }
-  }
-
-  async onToggleACC(ev: any) {
-    if (this.EXGSwitchInput) {
-      this.EXGSwitchInput.disabled = true;
-    }
-    if (ev.target?.checked) {
-      let width_class: string;
-      if (this.ECGDiv === undefined) {
-        width_class = "full-width";
-      } else {
-        width_class = "half-width";
-        this.ECGDiv.classList.remove("full-width");
-        this.ECGDiv.classList.add("half-width");
-      }
-      this.ACCDiv = createDiv("ACCDiv", this.visContainerDiv, [
-        "float-left",
-        "almost-full-height",
-        width_class,
-      ]);
-
-      this.ACCDiv.addEventListener("wheel", this.onWheelACC.bind(this));
-
-      this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
-
-      this.acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
-      this.acc_x_ts = new TimeSeries();
-      this.acc_y_ts = new TimeSeries();
-      this.acc_z_ts = new TimeSeries();
-      this.acc_chart.addTimeSeries(this.acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
-      this.acc_chart.addTimeSeries(this.acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
-      this.acc_chart.addTimeSeries(this.acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
-      this.acc_chart.streamTo(this.acc_canvas, ACC_STREAM_DELAY_MS);
-      this.acc_chart.addPostRenderCallback(acc_legend);
-      this.acc_chart.addPostRenderCallback(scroll_legend);
-      setTimeout(() => {
-        if (this.acc_chart) {
-          this.acc_chart.removePostRenderCallback(scroll_legend);
-        }
-      }, SCROLL_LEGENT_DISP_TIME_MS);
-      this.acc_x_lp_ts = new TimeSeries();
-      this.acc_y_lp_ts = new TimeSeries();
-      this.acc_z_lp_ts = new TimeSeries();
-      this.acc_rho_ts = new TimeSeries();
-      this.acc_phi_ts = new TimeSeries();
-      this.acc_theta_ts = new TimeSeries();
-      this.acc_mag_ts = new TimeSeries();
-      this.acc_mag_bp_ts = new TimeSeries();
-
-      this.acc_resize = resizeSmoothieGen(this.acc_chart, 1, 1);
-      this.acc_resize_observer = new ResizeObserver((entries) => {
-        for (let entry of entries) {
-          if (entry.target === this.ACCDiv && this.acc_resize !== undefined) {
-            this.acc_resize();
+        setTimeout(() => {
+          this.ecg_ts?.append(timestamp, sample_i);
+          this.ecg_hp_ts?.append(timestamp, filtered_sample_i);
+          if (data_rms_i !== undefined) {
+            this.ecg_rms_ts?.append(timestamp, data_rms_i);
           }
-        }
-      });
-      this.acc_resize_observer.observe(this.ACCDiv);
-      this.acc_iir_coef = IIRCalc.lowpass({
-        order: AAC_LOWPASS_ORDER,
-        characteristic: "butterworth",
-        Fs: ACC_SAMPLE_RATE_HZ,
-        Fc: AAC_LOWPASS_CUTOFF_HZ,
-        preGain: false,
-      });
-      const AAC_MAG_BANDPASS_CENTER = Math.sqrt(
-        AAC_MAG_BANDPASS_HIGH_CUT_HZ * AAC_MAG_BANDPASS_LOW_CUT_HZ,
-      );
-      const AAC_MAG_BANDPASS_BW =
-        AAC_MAG_BANDPASS_HIGH_CUT_HZ - AAC_MAG_BANDPASS_LOW_CUT_HZ;
-      this.acc_mag_iir_coef = IIRCalc.bandpass({
-        order: AAC_MAG_LOWPASS_ORDER,
-        characteristic: "butterworth",
-        Fs: ACC_SAMPLE_RATE_HZ,
-        BW: AAC_MAG_BANDPASS_BW,
-        Fc: AAC_MAG_BANDPASS_CENTER,
-        preGain: false,
-      });
-      this.acc_x_iir = IirFilter(this.acc_iir_coef);
-      this.acc_y_iir = IirFilter(this.acc_iir_coef);
-      this.acc_z_iir = IirFilter(this.acc_iir_coef);
-      this.acc_mag_iir = IirFilter(this.acc_mag_iir_coef);
-      this.acc_resize();
-
-      this.configureACCGraph = configTSforChartGen(
-        this.acc_chart,
-        [
-          this.acc_x_ts,
-          this.acc_y_ts,
-          this.acc_z_ts,
-          this.acc_x_lp_ts,
-          this.acc_y_lp_ts,
-          this.acc_z_lp_ts,
-          this.acc_rho_ts,
-          this.acc_phi_ts,
-          this.acc_theta_ts,
-          this.acc_mag_ts,
-          this.acc_mag_bp_ts,
-        ],
-        [
-          acc_lp_legend,
-          tilt_legend,
-          acc_mag_legend,
-          acc_mag_bp_legend,
-          acc_legend,
-        ],
-      );
-
-      if (this.ACCFormSelect !== undefined) {
-        this.ACCFormSelect.disabled = false;
-        this.ACCFormSelect.selectedIndex = 0;
+        }, plotDelay);
       }
-
-      await this.startACC(ACC_RANGE_G, ACC_SAMPLE_RATE_HZ);
-    } else {
-      if (
-        this.ACCDiv !== undefined &&
-        this.acc_canvas !== undefined &&
-        this.acc_chart !== undefined
-      ) {
-        this.acc_chart.stop();
-        if (this.ACCFormSelect !== undefined) {
-          this.ACCFormSelect.disabled = true;
-          this.ACCFormSelect.selectedIndex = 0;
-        }
-        if (this.ACCDiv.contains(this.acc_canvas)) {
-          this.ACCDiv.removeChild(this.acc_canvas);
-        }
-        this.ECGDiv?.classList.remove("half-width");
-        this.ECGDiv?.classList.add("full-width");
-        this.polarH10.removeEventListener("ACC", this.newACCCallback);
-        this.visContainerDiv.removeChild(this.ACCDiv);
-        this.acc_resize_observer?.disconnect();
-        await this.stopAcc();
-
-        this.resetACC();
-      }
-    }
-    if (this.EXGSwitchInput) {
-      this.EXGSwitchInput.disabled = false;
     }
   }
 
-  changeEXGGraph(evt: any) {
+  newACCCallback = (data: PolarH10Data) => {
+    if (
+      this.acc_x_ts !== undefined &&
+      this.acc_y_ts !== undefined &&
+      this.acc_z_ts !== undefined &&
+      this.acc_x_lp_ts !== undefined &&
+      this.acc_y_lp_ts !== undefined &&
+      this.acc_z_lp_ts !== undefined &&
+      data.prev_sample_timestamp_ms > 0 &&
+      data.samples !== undefined &&
+      this.acc_x_iir !== undefined &&
+      this.acc_y_iir !== undefined &&
+      this.acc_z_iir !== undefined &&
+      this.acc_rho_ts !== undefined &&
+      this.acc_phi_ts !== undefined &&
+      this.acc_theta_ts !== undefined &&
+      this.acc_mag_ts !== undefined &&
+      this.acc_mag_bp_ts !== undefined
+    ) {
+      const numFrame = data.samples.length / 3;
+      const estimated_sample_interval =
+        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
+      const timeOffset =
+        data.event_time_offset_ms +
+        data.prev_sample_timestamp_ms +
+        estimated_sample_interval;
+
+      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
+        const frameNum = Math.floor(s_i / 3);
+        const plotDelay = frameNum * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const y_d = -(data.samples as Int16Array)[s_i];
+        const x_d = -(data.samples as Int16Array)[s_i + 1];
+        const z_d = (data.samples as Int16Array)[s_i + 2];
+        const x_lp_d = this.acc_x_iir.singleStep(x_d);
+        const y_lp_d = this.acc_y_iir.singleStep(y_d);
+        const z_lp_d = this.acc_z_iir.singleStep(z_d);
+        const x_lp_d_2 = x_lp_d * x_lp_d;
+        const y_lp_d_2 = y_lp_d * y_lp_d;
+        const z_lp_d_2 = z_lp_d * z_lp_d;
+        const rho =
+          (Math.atan(x_lp_d / Math.sqrt(y_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
+        const phi =
+          (Math.atan(y_lp_d / Math.sqrt(x_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
+        const theta =
+          (Math.atan(Math.sqrt(x_lp_d_2 + y_lp_d_2) / z_lp_d) / Math.PI) * 180;
+        const acc_mag = Math.sqrt(x_d * x_d + y_d * y_d + z_d * z_d);
+        const acc_mag_bp = this.acc_mag_iir.singleStep(acc_mag);
+        setTimeout(() => {
+          this.acc_x_ts?.append(timestamp, x_d);
+          this.acc_y_ts?.append(timestamp, y_d);
+          this.acc_z_ts?.append(timestamp, z_d);
+          this.acc_x_lp_ts?.append(timestamp, x_lp_d);
+          this.acc_y_lp_ts?.append(timestamp, y_lp_d);
+          this.acc_z_lp_ts?.append(timestamp, z_lp_d);
+          this.acc_rho_ts?.append(timestamp, rho);
+          this.acc_phi_ts?.append(timestamp, phi);
+          this.acc_theta_ts?.append(timestamp, theta);
+          this.acc_mag_ts?.append(timestamp, acc_mag);
+          this.acc_mag_bp_ts?.append(timestamp, acc_mag_bp);
+        }, plotDelay);
+      }
+    }
+  }
+
+  changeEXGGraph = (evt: any) => {
     if (
       this.ecg_canvas !== undefined &&
       this.ecg_chart !== undefined &&
@@ -971,7 +447,7 @@ class PolarVisRow {
     }
   }
 
-  changeACCGraph(evt: any) {
+  changeACCGraph = (evt: any) => {
     if (
       this.acc_canvas !== undefined &&
       this.acc_chart !== undefined &&
@@ -1085,122 +561,9 @@ class PolarVisRow {
     }
   }
 
-  private _newECGCallback(data: PolarH10Data) {
-    if (
-      this.ecg_ts !== undefined &&
-      this.ecg_rms_ts !== undefined &&
-      this.ecg_hp_ts !== undefined &&
-      data.prev_sample_timestamp_ms > 0 &&
-      data.samples !== undefined &&
-      this.ecg_rms_iir !== undefined
-    ) {
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
-        data.samples.length;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
 
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const plotDelay = s_i * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
-        const sample_i = (data.samples as Int32Array)[s_i];
-        const filtered_sample_i = this.ecg_rms_iir.singleStep(sample_i);
-        const filtered_sample_squared_i = filtered_sample_i * filtered_sample_i;
-        let data_rms_i: number | undefined = undefined;
-        if (this.ecg_ss_win !== undefined) {
-          this.ecg_ss += filtered_sample_squared_i;
-          if (this.ecg_ss_win_i < EXG_RMS_WINDOW_SIZE) {
-            this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
-            this.ecg_ss_win_i++;
-          } else {
-            this.ecg_ss -= this.ecg_ss_win[0];
-            this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
-            this.ecg_ss_win[EXG_RMS_WINDOW_SIZE - 1] =
-              filtered_sample_squared_i;
-          }
-          if (this.ecg_ss_win_i === EXG_RMS_WINDOW_SIZE) {
-            data_rms_i = Math.sqrt(this.ecg_ss / EXG_RMS_WINDOW_SIZE);
-          }
-        }
-        setTimeout(() => {
-          this.ecg_ts?.append(timestamp, sample_i);
-          this.ecg_hp_ts?.append(timestamp, filtered_sample_i);
-          if (data_rms_i !== undefined) {
-            this.ecg_rms_ts?.append(timestamp, data_rms_i);
-          }
-        }, plotDelay);
-      }
-    }
-  }
 
-  private _newACCCallback(data: PolarH10Data) {
-    if (
-      this.acc_x_ts !== undefined &&
-      this.acc_y_ts !== undefined &&
-      this.acc_z_ts !== undefined &&
-      this.acc_x_lp_ts !== undefined &&
-      this.acc_y_lp_ts !== undefined &&
-      this.acc_z_lp_ts !== undefined &&
-      data.prev_sample_timestamp_ms > 0 &&
-      data.samples !== undefined &&
-      this.acc_x_iir !== undefined &&
-      this.acc_y_iir !== undefined &&
-      this.acc_z_iir !== undefined &&
-      this.acc_rho_ts !== undefined &&
-      this.acc_phi_ts !== undefined &&
-      this.acc_theta_ts !== undefined &&
-      this.acc_mag_ts !== undefined &&
-      this.acc_mag_bp_ts !== undefined
-    ) {
-      const numFrame = data.samples.length / 3;
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
-
-      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
-        const frameNum = Math.floor(s_i / 3);
-        const plotDelay = frameNum * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
-        const y_d = -(data.samples as Int16Array)[s_i];
-        const x_d = -(data.samples as Int16Array)[s_i + 1];
-        const z_d = (data.samples as Int16Array)[s_i + 2];
-        const x_lp_d = this.acc_x_iir.singleStep(x_d);
-        const y_lp_d = this.acc_y_iir.singleStep(y_d);
-        const z_lp_d = this.acc_z_iir.singleStep(z_d);
-        const x_lp_d_2 = x_lp_d * x_lp_d;
-        const y_lp_d_2 = y_lp_d * y_lp_d;
-        const z_lp_d_2 = z_lp_d * z_lp_d;
-        const rho =
-          (Math.atan(x_lp_d / Math.sqrt(y_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
-        const phi =
-          (Math.atan(y_lp_d / Math.sqrt(x_lp_d_2 + z_lp_d_2)) / Math.PI) * 180;
-        const theta =
-          (Math.atan(Math.sqrt(x_lp_d_2 + y_lp_d_2) / z_lp_d) / Math.PI) * 180;
-        const acc_mag = Math.sqrt(x_d * x_d + y_d * y_d + z_d * z_d);
-        const acc_mag_bp = this.acc_mag_iir.singleStep(acc_mag);
-        setTimeout(() => {
-          this.acc_x_ts?.append(timestamp, x_d);
-          this.acc_y_ts?.append(timestamp, y_d);
-          this.acc_z_ts?.append(timestamp, z_d);
-          this.acc_x_lp_ts?.append(timestamp, x_lp_d);
-          this.acc_y_lp_ts?.append(timestamp, y_lp_d);
-          this.acc_z_lp_ts?.append(timestamp, z_lp_d);
-          this.acc_rho_ts?.append(timestamp, rho);
-          this.acc_phi_ts?.append(timestamp, phi);
-          this.acc_theta_ts?.append(timestamp, theta);
-          this.acc_mag_ts?.append(timestamp, acc_mag);
-          this.acc_mag_bp_ts?.append(timestamp, acc_mag_bp);
-        }, plotDelay);
-      }
-    }
-  }
-
-  onWheelECG(ev: any) {
+  onWheelECG = (ev: any) => {
     if (this.ecg_chart !== undefined) {
       const delta = ev.deltaY < 0 ? EXG_DELTA : -EXG_DELTA;
       switch (this.EXGFormSelect?.selectedIndex) {
@@ -1238,7 +601,7 @@ class PolarVisRow {
     }
   }
 
-  onWheelACC(ev: any) {
+  onWheelACC = (ev: any) => {
     if (this.acc_chart !== undefined) {
       let delta = 0;
       switch (this.ACCFormSelect?.selectedIndex) {
@@ -1282,6 +645,660 @@ class PolarVisRow {
       }
     }
   }
+
+  onToggleECG = async (ev: any) => {
+    this.ACCSwitchInput.disabled = true;
+
+    if (ev.target?.checked) {
+      let width_class: string;
+      if (this.ACCDiv === undefined) {
+        width_class = "full-width";
+      } else {
+        width_class = "half-width";
+        this.ACCDiv.classList.remove("full-width");
+        this.ACCDiv.classList.add("half-width");
+        this.visContainerDiv.removeChild(this.ACCDiv);
+      }
+      this.ECGDiv = createDiv("ECGDiv", this.visContainerDiv, [
+        "float-left",
+        "almost-full-height",
+        width_class,
+      ]);
+      this.ECGDiv.addEventListener("wheel", this.onWheelECG);
+      if (this.ACCDiv !== undefined) {
+        this.visContainerDiv.appendChild(this.ACCDiv);
+      }
+      this.ecg_canvas = createCanvas("ecg_canvas", this.ECGDiv);
+
+      this.ecg_chart = new CustomSmoothie(DEFAULT_EXG_LINE_CHART_OPTION);
+      this.ecg_ts = new TimeSeries();
+      this.ecg_chart.addTimeSeries(this.ecg_ts, EXG_PRESENTATION_OPTIONS);
+      this.ecg_chart.streamTo(this.ecg_canvas, EXG_STREAM_DELAY_MS);
+      this.ecg_rms_ts = new TimeSeries();
+      this.ecg_hp_ts = new TimeSeries();
+      this.ecg_chart.addPostRenderCallback(exg_legend);
+      this.ecg_ss_win = new Float64Array(EXG_RMS_WINDOW_SIZE);
+      this.ecg_ss_win_i = 0;
+      this.ecg_ss = 0;
+
+      this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
+      this.ecg_resize_observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+          if (entry.target === this.ECGDiv && this.ecg_resize !== undefined) {
+            this.ecg_resize();
+          }
+        }
+      });
+      this.ecg_resize_observer.observe(this.ECGDiv);
+      this.ecg_rms_iir_coef = IIRCalc.highpass({
+        order: EXG_RMS_HIGHPASS_ORDER,
+        characteristic: "butterworth",
+        Fs: EXG_SAMPLE_RATE_HZ,
+        Fc: EXG_RMS_HIGHPASS_CUTOFF_HZ,
+        preGain: false,
+      });
+      this.ecg_rms_iir = IirFilter(this.ecg_rms_iir_coef);
+      this.ecg_resize();
+
+      if (this.EXGFormSelect !== undefined) {
+        this.EXGFormSelect.disabled = false;
+        this.EXGFormSelect.selectedIndex = 0;
+      }
+
+      this.configureEXGGraph = configTSforChartGen(
+        this.ecg_chart,
+        [this.ecg_ts, this.ecg_rms_ts, this.ecg_hp_ts],
+        [exg_legend, exg_rms_legend, exg_hp_legend],
+      );
+
+      await this.startECG(EXG_SAMPLE_RATE_HZ);
+    } else {
+      if (
+        this.ECGDiv !== undefined &&
+        this.ecg_canvas !== undefined &&
+        this.ecg_chart !== undefined
+      ) {
+        this.ecg_chart.stop();
+        if (this.EXGFormSelect !== undefined) {
+          this.EXGFormSelect.disabled = true;
+          this.EXGFormSelect.selectedIndex = 0;
+        }
+        if (this.ECGDiv.contains(this.ecg_canvas)) {
+          this.ACCDiv?.classList.remove("half-width");
+          this.ACCDiv?.classList.add("full-width");
+          await this.stopECG();
+          this.visContainerDiv.removeChild(this.ECGDiv);
+          this.ecg_resize_observer?.disconnect();
+          this.polarH10.removeEventListener("ECG", this.newECGCallback);
+          this.resetECG();
+        }
+      }
+    }
+    if (this.ACCSwitchInput) {
+      this.ACCSwitchInput.disabled = false;
+    }
+  }
+
+  onToggleACC = async (ev: any) => {
+    if (this.EXGSwitchInput) {
+      this.EXGSwitchInput.disabled = true;
+    }
+    if (ev.target?.checked) {
+      let width_class: string;
+      if (this.ECGDiv === undefined) {
+        width_class = "full-width";
+      } else {
+        width_class = "half-width";
+        this.ECGDiv.classList.remove("full-width");
+        this.ECGDiv.classList.add("half-width");
+      }
+      this.ACCDiv = createDiv("ACCDiv", this.visContainerDiv, [
+        "float-left",
+        "almost-full-height",
+        width_class,
+      ]);
+
+      this.ACCDiv.addEventListener("wheel", this.onWheelACC);
+
+      this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
+
+      this.acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
+      this.acc_x_ts = new TimeSeries();
+      this.acc_y_ts = new TimeSeries();
+      this.acc_z_ts = new TimeSeries();
+      this.acc_chart.addTimeSeries(this.acc_x_ts, X_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.addTimeSeries(this.acc_y_ts, Y_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.addTimeSeries(this.acc_z_ts, Z_AXIS_PRESENTATION_OPTIONS);
+      this.acc_chart.streamTo(this.acc_canvas, ACC_STREAM_DELAY_MS);
+      this.acc_chart.addPostRenderCallback(acc_legend);
+      this.acc_chart.addPostRenderCallback(scroll_legend);
+      setTimeout(() => {
+        if (this.acc_chart) {
+          this.acc_chart.removePostRenderCallback(scroll_legend);
+        }
+      }, SCROLL_LEGENT_DISP_TIME_MS);
+      this.acc_x_lp_ts = new TimeSeries();
+      this.acc_y_lp_ts = new TimeSeries();
+      this.acc_z_lp_ts = new TimeSeries();
+      this.acc_rho_ts = new TimeSeries();
+      this.acc_phi_ts = new TimeSeries();
+      this.acc_theta_ts = new TimeSeries();
+      this.acc_mag_ts = new TimeSeries();
+      this.acc_mag_bp_ts = new TimeSeries();
+
+      this.acc_resize = resizeSmoothieGen(this.acc_chart, 1, 1);
+      this.acc_resize_observer = new ResizeObserver((entries) => {
+        for (let entry of entries) {
+          if (entry.target === this.ACCDiv && this.acc_resize !== undefined) {
+            this.acc_resize();
+          }
+        }
+      });
+      this.acc_resize_observer.observe(this.ACCDiv);
+      this.acc_iir_coef = IIRCalc.lowpass({
+        order: AAC_LOWPASS_ORDER,
+        characteristic: "butterworth",
+        Fs: ACC_SAMPLE_RATE_HZ,
+        Fc: AAC_LOWPASS_CUTOFF_HZ,
+        preGain: false,
+      });
+      const AAC_MAG_BANDPASS_CENTER = Math.sqrt(
+        AAC_MAG_BANDPASS_HIGH_CUT_HZ * AAC_MAG_BANDPASS_LOW_CUT_HZ,
+      );
+      const AAC_MAG_BANDPASS_BW =
+        AAC_MAG_BANDPASS_HIGH_CUT_HZ - AAC_MAG_BANDPASS_LOW_CUT_HZ;
+      this.acc_mag_iir_coef = IIRCalc.bandpass({
+        order: AAC_MAG_LOWPASS_ORDER,
+        characteristic: "butterworth",
+        Fs: ACC_SAMPLE_RATE_HZ,
+        BW: AAC_MAG_BANDPASS_BW,
+        Fc: AAC_MAG_BANDPASS_CENTER,
+        preGain: false,
+      });
+      this.acc_x_iir = IirFilter(this.acc_iir_coef);
+      this.acc_y_iir = IirFilter(this.acc_iir_coef);
+      this.acc_z_iir = IirFilter(this.acc_iir_coef);
+      this.acc_mag_iir = IirFilter(this.acc_mag_iir_coef);
+      this.acc_resize();
+
+      this.configureACCGraph = configTSforChartGen(
+        this.acc_chart,
+        [
+          this.acc_x_ts,
+          this.acc_y_ts,
+          this.acc_z_ts,
+          this.acc_x_lp_ts,
+          this.acc_y_lp_ts,
+          this.acc_z_lp_ts,
+          this.acc_rho_ts,
+          this.acc_phi_ts,
+          this.acc_theta_ts,
+          this.acc_mag_ts,
+          this.acc_mag_bp_ts,
+        ],
+        [
+          acc_lp_legend,
+          tilt_legend,
+          acc_mag_legend,
+          acc_mag_bp_legend,
+          acc_legend,
+        ],
+      );
+
+      if (this.ACCFormSelect !== undefined) {
+        this.ACCFormSelect.disabled = false;
+        this.ACCFormSelect.selectedIndex = 0;
+      }
+
+      await this.startACC(ACC_RANGE_G, ACC_SAMPLE_RATE_HZ);
+      this.show3DBtn.disabled = false;
+    } else {
+      this.show3DBtn.disabled = true;
+      if (
+        this.ACCDiv !== undefined &&
+        this.acc_canvas !== undefined &&
+        this.acc_chart !== undefined
+      ) {
+        this.acc_chart.stop();
+        if (this.ACCFormSelect !== undefined) {
+          this.ACCFormSelect.disabled = true;
+          this.ACCFormSelect.selectedIndex = 0;
+        }
+        if (this.ACCDiv.contains(this.acc_canvas)) {
+          this.ACCDiv.removeChild(this.acc_canvas);
+        }
+        this.ECGDiv?.classList.remove("half-width");
+        this.ECGDiv?.classList.add("full-width");
+        this.polarH10.removeEventListener("ACC", this.newACCCallback);
+        this.visContainerDiv.removeChild(this.ACCDiv);
+        this.acc_resize_observer?.disconnect();
+        await this.stopAcc();
+
+        this.resetACC();
+      }
+    }
+    if (this.EXGSwitchInput) {
+      this.EXGSwitchInput.disabled = false;
+    }
+  }
+
+  private removeSelf() {
+    if (this.parent.contains(this.polarSensorDiv)) {
+      this.parent.removeChild(this.polarSensorDiv);
+    }
+    const myInd = PolarVisRow.polarVisRows.indexOf(this);
+    if (myInd > -1) {
+      PolarVisRow.polarVisRows.splice(myInd, 1);
+      if (PolarVisRow.polarVisRows.length > 0) {
+        if (myInd === PolarVisRow.polarVisRows.length) {
+          PolarVisRow.polarVisRows[myInd - 1].orderDownBtn.disabled = true;
+        } else if (myInd === 0) {
+          PolarVisRow.polarVisRows[0].orderUpBtn.disabled = true;
+        }
+        PolarVisRow.reOrderRows();
+      }
+    }
+  }
+  private static reOrderRows() {
+    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      const row = PolarVisRow.polarVisRows[i];
+      row.order = i;
+      row.polarSensorDiv.style.order = i.toString();
+    }
+  }
+
+  private async initPolarH10() {
+    this.polarSensorDiv = createDiv(`polarSensorDiv`, this.parent, [
+      "polar-sensor-row",
+      "flexbox",
+    ]);
+    this.optionDiv = createDiv(`optionDiv`, this.polarSensorDiv, [
+      "polar-sensor-left-panel",
+      "center",
+    ]);
+    this.order = PolarVisRow.polarVisRows.length;
+    this.polarSensorDiv.style.order = this.order.toString();
+
+    this.nameDiv = createDiv(
+      `device-name-batt`,
+      this.optionDiv,
+      ["center", "flexbox"],
+      `Conneting ${this.deviceName}...`,
+    );
+    this.loadingDiv = createDiv("ConnectLoading", this.optionDiv, [
+      "loading",
+      "loading-lg",
+      "full-width",
+      "flexbox",
+    ]);
+    await this.initPolarH10IfUnique();
+  }
+
+  includesDuplicate(
+    key: string = "device",
+    conditionCallback: ConditionChecker | undefined = undefined,
+  ): number {
+    let duplicateInd = -1;
+    if (conditionCallback !== undefined) {
+      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+        let row = PolarVisRow.polarVisRows[i];
+        if (row !== this && row[key] === this[key] && conditionCallback(row)) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    } else {
+      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+        let row = PolarVisRow.polarVisRows[i];
+        if (row !== this && row[key] === this[key]) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    }
+
+    return duplicateInd;
+  }
+
+
+
+  static includesDuplicate(
+    self: PolarVisRow,
+    key: string = "device",
+    conditionCallback: ConditionChecker | undefined = undefined,
+  ): number {
+    let duplicateInd = -1;
+    if (conditionCallback !== undefined) {
+      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+        let row = PolarVisRow.polarVisRows[i];
+        if (row !== self && row[key] === self[key] && conditionCallback(row)) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    } else {
+      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+        let row = PolarVisRow.polarVisRows[i];
+        if (row !== self && row[key] === self[key]) {
+          duplicateInd = i;
+          break;
+        }
+      }
+    }
+
+    return duplicateInd;
+  }
+
+  disconnectPolarH10IfAlone() {
+    if (this.includesDuplicate("device") === -1) {
+      this.device.gatt?.disconnect();
+    }
+  }
+
+  async initPolarH10IfUnique() {
+    const duplicateInd = this.includesDuplicate("device");
+    if (duplicateInd < 0) {
+      try {
+        this.polarH10 = new PolarH10(this.device);
+        await this.polarH10.init();
+      } catch (err) {
+        console.log(err);
+        throw new Error("polarH10 device initialization failed!");
+      }
+    } else {
+      this.polarH10 = PolarVisRow.polarVisRows[duplicateInd].polarH10;
+    }
+  }
+
+  resetECG() {
+    this.ecg_canvas = undefined;
+    this.ECGDiv = undefined;
+    this.ecg_resize = undefined;
+    this.ecg_ss_win = undefined;
+    this.ecg_chart = undefined;
+    this.ecg_ts = undefined;
+    this.ecg_hp_ts = undefined;
+    this.ecg_rms_ts = undefined;
+    this.ecg_resize_observer = undefined;
+    this.ecg_rms_iir_coef = undefined;
+    this.ecg_rms_iir = undefined;
+    this.ecg_ss_win_i = 0;
+    this.ecg_ss = 0;
+    this.configureEXGGraph = undefined;
+  }
+
+  resetACC() {
+    this.ACCDiv = undefined;
+    this.acc_resize = undefined;
+    this.acc_canvas = undefined;
+    this.acc_chart = undefined;
+    this.acc_x_ts = undefined;
+    this.acc_y_ts = undefined;
+    this.acc_z_ts = undefined;
+    this.acc_resize_observer = undefined;
+    this.acc_iir_coef = undefined;
+    this.acc_mag_iir_coef = undefined;
+    this.acc_x_iir = undefined;
+    this.acc_y_iir = undefined;
+    this.acc_z_iir = undefined;
+    this.acc_x_lp_ts = undefined;
+    this.acc_y_lp_ts = undefined;
+    this.acc_z_lp_ts = undefined;
+    this.acc_mag_iir = undefined;
+    this.acc_rho_ts = undefined;
+    this.acc_phi_ts = undefined;
+    this.acc_theta_ts = undefined;
+    this.acc_mag_ts = undefined;
+    this.acc_mag_bp_ts = undefined;
+    this.configureACCGraph = undefined;
+  }
+
+  private async initDeviceInfo() {
+    this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
+      "device-info",
+    ]);
+
+    this.disconnectDiv = createDiv("disconnectDiv", undefined, [
+      "flexbox",
+      "disconnect",
+    ]);
+
+    this.disBtn = createButtonIcon("delete", "distBtn", this.disconnectDiv, false,
+      this.disconnectPolarH10,
+      ["btn", "btn-primary", "btn-sm", "s-circle"]
+    )
+
+    addTooltip(this.disBtn, "disconnect", "top");
+
+    this.battLvl = await this.polarH10.getBatteryLevel();
+    this.optionDiv.removeChild(this.loadingDiv);
+    this.optionDiv.removeChild(this.nameDiv);
+    this.optionDiv.classList.remove("center");
+
+    this.nameDiv.textContent = "";
+    this.nameDiv.classList.add("flex");
+    this.deviceNameDiv = createDiv(
+      "devicename",
+      this.nameDiv,
+      ["flexbox"],
+      this.deviceName,
+    );
+
+    let battStr: string;
+    if (this.battLvl > LOW_BATT_LVL) {
+      battStr = `🔋${this.battLvl}%`;
+    } else {
+      battStr = `🪫${this.battLvl}%`;
+    }
+    this.battLvlDiv = createDiv(
+      "battLvl",
+      this.nameDiv,
+      ["flexbox", "small-mid-text"],
+      battStr,
+    );
+    this.nameDiv.classList.add("flexbox");
+    this.deviceInfoDiv.appendChild(this.disconnectDiv);
+    this.deviceInfoDiv.appendChild(this.nameDiv);
+    this.optionDiv.appendChild(this.deviceInfoDiv);
+
+    this.dataInfo = createDiv("dataInfo", this.deviceInfoDiv, ["data-info"]);
+
+    this.extraDataCtrl = createDiv("extraDataCtrl", this.optionDiv, ["extra-data-ctrl", "center"]);
+
+    this.show3DBtn = createButtonIcon("view_in_ar", "show3DBtn",
+      this.extraDataCtrl, true, undefined, ["btn", "btn-sm"])
+    this.show3DBtn.disabled = true;
+
+    this.filterConfigBtn = createButtonIcon("settings", "filterConfigBtn",
+      this.extraDataCtrl, true, undefined, ["btn", "btn-primary", "btn-sm"])
+
+    this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
+
+    this.orderUpBtn = createButtonIcon("arrow-up", "orderUpBtn",
+      this.rowOrder, false, this.moveUp, ["btn", "btn-primary", "btn-sm"])
+    addTooltip(this.orderUpBtn, "Move up", "right");
+
+    this.orderUpBtn.disabled = PolarVisRow.polarVisRows.length < 1;
+    addTooltip(this.orderUpBtn, "Move up", "right");
+
+    this.orderDownBtn = createButtonIcon("arrow-down", "orderDownBtn",
+      this.rowOrder, false, this.moveDown, ["btn", "btn-primary", "btn-sm"])
+    addTooltip(this.orderDownBtn, "Move down", "right");
+
+    this.orderDownBtn.disabled = true;
+
+    if (PolarVisRow.polarVisRows.length > 0) {
+      PolarVisRow.polarVisRows[
+        PolarVisRow.polarVisRows.length - 1
+      ].orderDownBtn.disabled = false;
+    }
+
+
+    this.bodypartLabel = createDiv(
+      "bodypartLabel",
+      this.dataInfo,
+      ["bodypart-text"],
+      "Bodypart:",
+    );
+
+    this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
+      "bodypart-select",
+    ]);
+
+    this.bodypartSelect = createSelect(
+      "bodypartSelect",
+      this.bodypartSelectDiv,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      BODY_PARTS,
+      getPolarRowId,
+    );
+
+    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, ["data-ctrl"]);
+
+    // filterConfigBtn
+
+    this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
+      "full-width-height",
+    ]);
+  }
+
+  private async initDeviceGraphCtrl() {
+    this.EXGCtrlDiv = createDiv("EXGCtrlDiv", this.dataCtrl, ["half-width"]);
+    const EXG_switch = createSwitch("EXG", this.onToggleECG);
+    this.EXGCtrlDiv.appendChild(EXG_switch);
+    this.EXGSwitchInput = EXG_switch.children.item(0) as HTMLInputElement;
+    this.EXGDropDown = createDiv("EXGDropDownDiv", this.EXGCtrlDiv, [
+      "form-group",
+    ]);
+    this.EXGFormSelect = createSelect(
+      "EXGFormSelect",
+      this.EXGDropDown,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      EXG_DATA_OPTIONS,
+    );
+    this.EXGFormSelect.selectedIndex = 0;
+    this.EXGFormSelect.onchange = this.changeEXGGraph;
+    this.EXGFormSelect.disabled = true;
+
+    this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
+    const ACC_switch = createSwitch("ACC", this.onToggleACC);
+    this.ACCCtrlDiv.appendChild(ACC_switch);
+    this.ACCSwitchInput = ACC_switch.children.item(0) as HTMLInputElement;
+    this.ACCDropDown = createDiv("ACCDropDownDiv", this.ACCCtrlDiv, [
+      "form-group",
+    ]);
+    this.ACCFormSelect = createSelect(
+      "ACCFormSelect",
+      this.ACCDropDown,
+      ["form-select", "dark-select", "select-sm", "almost-full-width"],
+      "",
+      ACC_DATA_OPTIONS,
+    );
+    this.ACCFormSelect.selectedIndex = 0;
+    this.ACCFormSelect.onchange = this.changeACCGraph;
+    this.ACCFormSelect.disabled = true;
+  }
+
+  async startECG(
+    sampleRate: number = EXG_SAMPLE_RATE_HZ,
+    addCallback: boolean = true,
+  ) {
+    const duplicateInd = this.includesDuplicate("device", ECGIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const startECGReply = await this.polarH10.startECG(sampleRate);
+        if (
+          startECGReply?.error === "SUCCESS" ||
+          startECGReply?.error === "ALREADY IN STATE"
+        ) {
+          if (addCallback) {
+            this.polarH10.addEventListener("ECG", this.newECGCallback);
+          }
+        } else {
+          console.log(startECGReply);
+          this.disconnectPolarH10();
+        }
+      } catch (e) {
+        alert(e);
+        this.disconnectPolarH10();
+      }
+    } else {
+      this.polarH10.addEventListener("ECG", this.newECGCallback);
+    }
+  }
+
+  async stopECG() {
+    const duplicateInd = this.includesDuplicate("device", ECGIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const stopECGReply = await this.polarH10.stopECG();
+        if (stopECGReply) {
+          console.log(stopECGReply);
+        }
+      } catch (e) {
+        console.log(e);
+        alert(e);
+      }
+    }
+  }
+
+  async startACC(
+    range: number = ACC_RANGE_G,
+    sampleRate: number = ACC_SAMPLE_RATE_HZ,
+    addCallback: boolean = true,
+  ) {
+    const duplicateInd = this.includesDuplicate("device", ACCIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const startACCReply = await this.polarH10.startACC(range, sampleRate);
+        if (
+          startACCReply?.error === "SUCCESS" ||
+          startACCReply?.error === "ALREADY IN STATE"
+        ) {
+          if (addCallback) {
+            this.polarH10.addEventListener("ACC", this.newACCCallback);
+          }
+        } else {
+          console.log(startACCReply);
+          this.disconnectPolarH10();
+        }
+      } catch (e) {
+        alert(e);
+        this.disconnectPolarH10();
+      }
+    } else {
+      this.polarH10.addEventListener("ACC", this.newACCCallback);
+    }
+  }
+
+  async stopAcc() {
+    const duplicateInd = this.includesDuplicate("device", ACCIsOn);
+    if (duplicateInd < 0) {
+      try {
+        const stopACCReply = await this.polarH10.stopACC();
+        if (stopACCReply) {
+          console.log(stopACCReply);
+        }
+      } catch (e) {
+        console.log(e);
+        alert(e);
+      }
+    }
+  }
+
+  ECGIsOn() {
+    return this.ECGDiv !== undefined;
+  }
+
+  ACCIsOn() {
+    return this.ACCDiv !== undefined;
+  }
+
+
+
+
 }
 
 function configTSforChartGen(
@@ -1661,4 +1678,38 @@ function ECGIsOn(row: PolarVisRow) {
 
 function ACCIsOn(row: PolarVisRow) {
   return row.ACCDiv !== undefined;
+}
+
+type TPDir = "top" | "right" | "bottom" | "left";
+
+function addTooltip(e: HTMLElement, tooltip: string, dir: TPDir = "top") {
+  e.setAttribute("data-tooltip", tooltip);
+  e.classList.add("tooltip", `tooltip-${dir}`);
+}
+
+function createButtonIcon(type: string, id: string | undefined = undefined, parent: HTMLElement | undefined = undefined, isMaterialIcon: boolean = false, onclick: GlobalEventHandlers["onclick"] | undefined = undefined, classList: string[] = [], idGenerator: () => number = getPolarRowId) {
+  const btn = document.createElement("button");
+  if (id) {
+    btn.id = `${id}-${idGenerator()}`;
+  }
+  btn.classList.add("flexbox", "center")
+  const icon = document.createElement("i");
+  if (isMaterialIcon) {
+    icon.classList.add("material-icons");
+    icon.textContent = type;
+  } else {
+    icon.classList.add("icon", `icon-${type}`)
+  }
+
+  btn.appendChild(icon)
+  if (classList.length > 0) {
+    btn.classList.add(...classList);
+  }
+  if (onclick) {
+    btn.onclick = onclick
+  }
+  if (parent) {
+    parent.appendChild(btn);
+  }
+  return btn
 }
