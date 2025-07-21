@@ -78,7 +78,7 @@ export const ACC_MAG_DELTA = 1;
 export const ACC_MAG_SCROLL_MIN = 1;
 
 export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
-  // limitFPS: 60,
+  limitFPS: 60,
   grid: {
     strokeStyle: "#484f58",
     fillStyle: "#000000",
@@ -101,7 +101,7 @@ export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
 };
 
 export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
-  // limitFPS: 60,
+  limitFPS: 60,
   minValue: ACC_MIN,
   maxValue: ACC_MAX,
   grid: {

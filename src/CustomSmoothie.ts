@@ -13,9 +13,14 @@ export class CustomSmoothie extends SmoothieChart {
 
   override render(canvas, time) {
     super.render(canvas, time);
-    for (let i = 0; i < this.postRender.length; i++) {
-      this.postRender[i](canvas, time);
+    const ts = Date.now()
+    const last_render_time = (this as any).lastRenderTimeMillis
+    if ((ts - last_render_time) < 2) {
+      for (let i = 0; i < this.postRender.length; i++) {
+        this.postRender[i](canvas, time);
+      }
     }
+
   }
 
   addPostRenderCallback(callback: PostRenderCallback) {
