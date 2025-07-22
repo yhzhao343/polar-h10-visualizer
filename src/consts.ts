@@ -214,25 +214,25 @@ export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 };
 
 export const X_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#f0883e",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#f0883e",
+};
 
 export const Y_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#f778ba",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#f778ba",
+};
 
 export const Z_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#388afd",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#388afd",
+};
 
 export const MAG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
@@ -266,19 +266,6 @@ export interface PolarH10Data {
   event_time_offset_ms: number;
 }
 
-// export const ECG_DATA_OPTIONS = [
-//   "Raw",
-//   `${ECG_HIGHPASS_CUTOFF_HZ.toFixed(0)}Hz Highpass`,
-//   "RMS",
-// ];
-
-// export const ACC_DATA_OPTIONS = [
-//   "Raw",
-//   `${AAC_LOWPASS_CUTOFF_HZ.toFixed(0)}Hz Lowpass`,
-//   "Tilt",
-//   // `${AAC_MAG_BANDPASS_LOW_CUT_HZ.toFixed(1)}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ.toFixed(1)}Hz mag`,
-// ];
-
 export interface FilterInfo {
   type: "lowpass" | "highpass" | "bandpass";
   order: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
@@ -291,6 +278,3 @@ export interface FilterInfo {
   gain?: number;
   preGain: boolean | number;
 }
-
-// export const RAW_ECG_LEGEND = "― Raw ECG (μV)"
-// export const ECG_RMS_LEGEND = `― Highpass ECG ${}`

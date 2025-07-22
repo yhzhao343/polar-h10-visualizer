@@ -18,6 +18,8 @@ export class SmoothieTSInfo {
   on: boolean = true;
   on_fillStyle: string;
   off_fillStyle: string = "#7f7f7f";
+  width: number | undefined = undefined;
+  height: number | undefined = undefined;
 
   constructor(
     timeseries: TimeSeries | undefined,
@@ -55,12 +57,12 @@ export class SmoothieTSInfo {
     this.enable(on);
   }
 
-  fontSize() {
-    return parseFloat(this.font.split("px")[0]);
+  getHeight() {
+    this.height = parseFloat(this.font.split("px")[0]);
+    return this.height;
   }
 
-  width(canvas: HTMLCanvasElement) {
-    let width = 0;
+  getWidth(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.save();
@@ -68,18 +70,16 @@ export class SmoothieTSInfo {
       ctx.textAlign = this.textAlign;
       ctx.font = this.font;
       ctx.fillStyle = this.fillStyle;
-      width = ctx.measureText(this.text).width;
+      this.width = ctx.measureText(this.text).width;
       ctx.restore();
     }
-    return width;
+    return this.width;
   }
 
   enable(on: boolean = true) {
     this.on = on;
     this.fillStyle = this.on ? this.on_fillStyle : this.off_fillStyle;
   }
-
-  // clickHandle()
 
   onclick() {
     this.on = !this.on;
@@ -90,20 +90,73 @@ export class SmoothieTSInfo {
 export class CustomSmoothie extends SmoothieChart {
   smoothieTSInfos: SmoothieTSInfo[];
   isRow: boolean = true;
+  allowToggleLegend: boolean = true;
+  allowToggleLabel: boolean = true;
 
-  constructor(option?: IChartOptions, isRow: boolean = true) {
+  constructor(
+    option?: IChartOptions,
+    isRow: boolean = true,
+    allowToggleLegend: boolean = true,
+    allowToggleLabel: boolean = true,
+  ) {
     super(option);
     this.smoothieTSInfos = [];
     this.isRow = isRow;
+    this.allowToggleLegend = allowToggleLegend;
+    this.allowToggleLabel = allowToggleLabel;
+  }
+
+  canvasOnClick = (ev: any) => {
+    console.log(`Click coordinate: ${ev.offsetX} ${ev.offsetY}`);
+    if (this.allowToggleLegend && "canvas" in this) {
+      const canvas: HTMLCanvasElement = this.canvas as HTMLCanvasElement;
+      for (let i = 0; i < this.smoothieTSInfos.length; i++) {
+        const info = this.smoothieTSInfos[i];
+        const width = info.width || info.getWidth(canvas) || 0;
+        const height = info.height || info.getHeight() || 0;
+        // console.log(` x:${info.x} y:${info.y} width:${width} height:${height}`);
+        if (width > 0 && height > 0) {
+          if (
+            ev.offsetX > info.x &&
+            ev.offsetX < info.x + width &&
+            ev.offsetY > info.y &&
+            ev.offsetY < info.y + height
+          ) {
+            // console.log(
+            //   ` ${info.text} clicked x:${info.x} y:${info.y} width:${width} height:${height}`,
+            // );
+            info.onclick();
+            if (info.on) {
+              if (info.timeseries !== undefined) {
+                this.addTimeSeries(info.timeseries, info.tsPresOpts);
+              }
+            } else {
+              if (info.timeseries !== undefined) {
+                this.removeTimeSeries(info.timeseries);
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+
+  override streamTo(canvas: HTMLCanvasElement, delayMillis?: number): void {
+    super.streamTo(canvas, delayMillis);
+    if ("canvas" in this) {
+      (this.canvas as HTMLCanvasElement).addEventListener(
+        "click",
+        this.canvasOnClick,
+      );
+    }
   }
 
   override render(canvas: HTMLCanvasElement, time: number) {
     super.render(canvas, time);
     if (this.smoothieTSInfos.length) {
-      const ts = Date.now();
       const last_render_time = (this as any).lastRenderTimeMillis;
-      const timeDelta = ts - last_render_time;
-      if (timeDelta < 2) {
+      const timeDelta = Date.now() - last_render_time;
+      if (timeDelta < 3) {
         this.renderLegend(canvas);
       }
     }
@@ -167,13 +220,6 @@ export class CustomSmoothie extends SmoothieChart {
     }
     this.smoothieTSInfos = [];
   }
-
-  // clearTimeSeriesSet() {
-  //   for (let i = 0; i < (this as any).seriesSet.length; i++) {
-  //     const ts: TimeSeries = (this as any).seriesSet[0] as TimeSeries;
-  //     this.removeTimeSeries(ts);
-  //   }
-  // }
 
   configureTimeSeries(
     timeserieses: TimeSeries[],

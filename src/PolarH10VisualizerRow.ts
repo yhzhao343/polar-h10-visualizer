@@ -1331,7 +1331,7 @@ class PolarVisRow {
       ["form-select", "dark-select", "select-sm", "almost-full-width"],
       "",
       [
-        "raw",
+        "Raw",
         compactPrettyPrintFilter(this.acc_lp_info),
         "Tilt",
         compactPrettyPrintFilter(this.acc_filter_info),
