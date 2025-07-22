@@ -44,19 +44,19 @@ export const ERROR_MSGS = [
 export const SCROLL_MAX_LIMIT_FACTOR = 5;
 export const LOW_BATT_LVL = 35;
 
-export const EXG_STREAM_DELAY_MS = 600;
-export const EXG_RMS_WINDOW_MS = 200;
-export const EXG_RMS_WINDOW_SIZE = Math.round(130 / (1000 / EXG_RMS_WINDOW_MS));
-export const EXG_HP_MIN = -120;
-export const EXG_HP_MAX = 120;
-export const EXG_RMS_MIN = 0;
-export const EXG_RMS_MAX = 120;
-export const EXG_RMS_HIGHPASS_CUTOFF_HZ = 25;
-export const EXG_RMS_HIGHPASS_ORDER = 4;
-export const EXG_SAMPLE_RATE_HZ = 130;
-export const EXG_HP_SCROLL_MIN = 5;
-export const EXG_RMS_SCROLL_MIN = 5;
-export const EXG_DELTA = 1;
+export const ECG_STREAM_DELAY_MS = 600;
+export const ECG_RMS_WINDOW_MS = 200;
+export const ECG_RMS_WINDOW_SIZE = Math.round(130 / (1000 / ECG_RMS_WINDOW_MS));
+export const ECG_FILTER_MIN = -120;
+export const ECG_FILTER_MAX = 120;
+export const ECG_RMS_MIN = 0;
+export const ECG_RMS_MAX = 120;
+export const ECG_HIGHPASS_CUTOFF_HZ = 25;
+export const ECG_FILTER_ORDER = 4;
+export const ECG_SAMPLE_RATE_HZ = 130;
+export const ECG_FILTER_SCROLL_MIN = 5;
+export const ECG_RMS_SCROLL_MIN = 5;
+export const ECG_DELTA = 1;
 
 export const ACC_STREAM_DELAY_MS = 600;
 export const ACC_SAMPLE_RATE_HZ = 100;
@@ -69,15 +69,15 @@ export const SCROLL_LEGENT_DISP_TIME_MS = 1500;
 export const ACC_DELTA = 10;
 export const ACC_SCROLL_MIN = 100;
 
-export const AAC_MAG_BANDPASS_HIGH_CUT_HZ = 2.5;
-export const AAC_MAG_BANDPASS_LOW_CUT_HZ = 0.1;
-export const AAC_MAG_LOWPASS_ORDER = 4;
-export const ACC_MAG_BP_MIN = -20;
-export const ACC_MAG_BP_MAX = 20;
+export const AAC_FILTER_BANDPASS_HIGH_CUT_HZ = 2.5;
+export const AAC_FILTER_BANDPASS_LOW_CUT_HZ = 0.1;
+export const AAC_FILTER_ORDER = 4;
+export const ACC_FILTER_MIN = -20;
+export const ACC_FILTER_MAX = 20;
 export const ACC_MAG_DELTA = 1;
 export const ACC_MAG_SCROLL_MIN = 1;
 
-export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
+export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   limitFPS: 60,
   grid: {
     strokeStyle: "#484f58",
@@ -87,7 +87,7 @@ export const DEFAULT_EXG_LINE_CHART_OPTION: IChartOptions = {
     borderVisible: false,
   },
   title: {
-    text: "ECG/EMG raw (0.7–40 Hz)",
+    text: "EXG raw voltage (0.7–40 Hz)",
     fontFamily: "Arial",
     verticalAlign: "bottom",
     fillStyle: "#ffffff80",
@@ -128,19 +128,19 @@ export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
   tooltip: true,
 };
 
-export const EXG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+export const ECG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
   strokeStyle: "#ebebebcc",
 };
 
-export const EXG_HP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+export const ECG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
   strokeStyle: "#ffdcaacc",
 };
 
-export const EXG_RMS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+export const ECG_RMS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
   strokeStyle: "#dcaaffcc",
@@ -204,13 +204,40 @@ export const THETA_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 export const MAG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "#ffdcaacc",
+  strokeStyle: "#ebebebcc",
 };
 
 export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "#dcaaffcc",
+  strokeStyle: "#ffdcaacc",
+};
+
+export const X_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f0883e",
+  };
+
+export const Y_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f778ba",
+  };
+
+export const Z_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#388afd",
+  };
+
+export const MAG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#aadcffcc",
 };
 
 export enum PolarSensorType {
@@ -239,11 +266,31 @@ export interface PolarH10Data {
   event_time_offset_ms: number;
 }
 
-export const EXG_DATA_OPTIONS = [
-  "Raw", `${EXG_RMS_HIGHPASS_CUTOFF_HZ.toFixed(0)}Hz Highpass`, "RMS"
-];
-export const ACC_DATA_OPTIONS = [
-  "Raw", `${AAC_LOWPASS_CUTOFF_HZ.toFixed(0)}Hz Lowpass`,
-  "Tilt", "Magnitude",
-  `${AAC_MAG_BANDPASS_LOW_CUT_HZ.toFixed(1)}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ.toFixed(1)}Hz mag`
-];
+// export const ECG_DATA_OPTIONS = [
+//   "Raw",
+//   `${ECG_HIGHPASS_CUTOFF_HZ.toFixed(0)}Hz Highpass`,
+//   "RMS",
+// ];
+
+// export const ACC_DATA_OPTIONS = [
+//   "Raw",
+//   `${AAC_LOWPASS_CUTOFF_HZ.toFixed(0)}Hz Lowpass`,
+//   "Tilt",
+//   // `${AAC_MAG_BANDPASS_LOW_CUT_HZ.toFixed(1)}-${AAC_MAG_BANDPASS_HIGH_CUT_HZ.toFixed(1)}Hz mag`,
+// ];
+
+export interface FilterInfo {
+  type: "lowpass" | "highpass" | "bandpass";
+  order: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+  characteristic: "butterworth" | "bessel";
+  Fs: number;
+  Fc?: number;
+  Fl?: number;
+  Fh?: number;
+  BW?: number;
+  gain?: number;
+  preGain: boolean | number;
+}
+
+// export const RAW_ECG_LEGEND = "― Raw ECG (μV)"
+// export const ECG_RMS_LEGEND = `― Highpass ECG ${}`
