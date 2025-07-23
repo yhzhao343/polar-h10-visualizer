@@ -128,8 +128,8 @@ export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
   millisPerPixel: 8,
   scaleSmoothing: 0.1,
   tooltip: false,
-  minValueScale: 1.3,
-  maxValueScale: 1.3,
+  minValueScale: 1,
+  maxValueScale: 1,
 };
 
 export const ECG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
