@@ -465,46 +465,55 @@ class PolarVisRow {
           this.ecg_chart.configureTimeSeries(
             [this.ecg_ts],
             [ECG_PRESENTATION_OPTIONS],
-            [genSmoothieLegendInfo("― Raw voltage (μV)", 10, 5)],
+            [genSmoothieLegendInfo("― Voltage (μV)", 10, 0)],
             false,
             undefined,
             undefined,
+            1,
+            1,
             DEFAULT_ECG_LINE_CHART_OPTION.title?.text ||
               "EXG raw voltage (0.7–40 Hz)",
             false,
             [],
+            true,
+            false,
+            true,
           );
           break;
         case 1: // filter:
           this.ecg_chart.configureTimeSeries(
             [this.ecg_filter_ts],
             [ECG_FILTER_PRESENTATION_OPTIONS],
-            [genSmoothieLegendInfo("― Filtered raw voltage (μV)", 10, 5)],
-            false,
+            [genSmoothieLegendInfo("― Voltage (μV)", 10, 0)],
+            true,
             this.ECG_FILTER_MIN,
             this.ECG_FILTER_MAX,
-            `${prettyPrintFilter(this.ecg_filter_info)} on ECG/EMG raw`,
+            1,
+            1,
+            `${prettyPrintFilter(this.ecg_filter_info)} on EXG raw`,
             false,
             [],
+            true,
+            true,
+            true,
           );
           break;
         case 2: //"RMS":
           this.ecg_chart.configureTimeSeries(
             [this.ecg_rms_ts],
             [ECG_RMS_PRESENTATION_OPTIONS],
-            [
-              genSmoothieLegendInfo(
-                `― Filtered EXG ${this.ecg_rms_window_ms} ms window RMS (μV)`,
-                10,
-                5,
-              ),
-            ],
+            [genSmoothieLegendInfo(`― RMS voltage (μV)`, 10, 0)],
             true,
             this.ECG_RMS_MIN,
             this.ECG_RMS_MAX,
-            "RMS (filtered EXG raw)",
+            1,
+            1,
+            `RMS using ${this.ecg_rms_window_ms}ms window on filtered EXG`,
             false,
             [],
+            true,
+            true,
+            true,
           );
           break;
       }
@@ -546,17 +555,22 @@ class PolarVisRow {
               MAG_PRESENTATION_OPTIONS,
             ],
             [
-              genSmoothieLegendInfo("― X-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Y-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Z-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Accelerometer magnitude (mG)", 10, 5),
+              genSmoothieLegendInfo("― X-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Y-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Z-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Accelerometer magnitude (mG)", 10, 0),
             ],
             true,
             this.ACC_MIN,
             this.ACC_MAX,
+            1,
+            1,
             DEFAULT_ACC_LINE_CHART_OPTION.title?.text || "Accelerometer raw",
             false,
             [],
+            true,
+            true,
+            true,
           );
           break;
         case 1: //"Lowpass":
@@ -574,21 +588,22 @@ class PolarVisRow {
               MAG_LP_PRESENTATION_OPTIONS,
             ],
             [
-              genSmoothieLegendInfo("― Lowpass X-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Lowpass Y-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Lowpass Z-axis (mG)", 10, 5),
-              genSmoothieLegendInfo(
-                "― Lowpass accelerometer magnitude (mG)",
-                10,
-                5,
-              ),
+              genSmoothieLegendInfo("― X-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Y-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Z-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Accelerometer magnitude (mG)", 10, 0),
             ],
             true,
             this.ACC_MIN,
             this.ACC_MAX,
-            `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on Accelerometer raw`,
+            1,
+            1,
+            `Lowpass (${AAC_LOWPASS_CUTOFF_HZ}Hz ${AAC_LOWPASS_ORDER}th order Butterworth) on accelerometer raw`,
             false,
             [],
+            true,
+            true,
+            true,
           );
           break;
 
@@ -601,19 +616,24 @@ class PolarVisRow {
               THETA_AXIS_PRESENTATION_OPTIONS,
             ],
             [
-              genSmoothieLegendInfo("― ρ° ∠(X-axis, Horizon)", 10, 5),
-              genSmoothieLegendInfo("― ϕ° ∠(Y-axis, Horizon)", 10, 5),
-              genSmoothieLegendInfo("― θ° ∠(Z-axis, -Gravity)", 10, 5),
+              genSmoothieLegendInfo("― ρ° ∠(X-axis, Horizon)", 10, 0),
+              genSmoothieLegendInfo("― ϕ° ∠(Y-axis, Horizon)", 10, 0),
+              genSmoothieLegendInfo("― θ° ∠(Z-axis, -Gravity)", 10, 0),
             ],
             false,
-            -140,
-            140,
+            -120,
+            120,
+            1.3,
+            1.3,
             "Tilt angle [-90°, 90°] from lowpass on accelerometer raw",
-            true,
+            false,
             [
               { value: 90, color: "#ffffff7f", lineWidth: 1 },
               { value: -90, color: "#ffffff7f", lineWidth: 1 },
             ],
+            true,
+            true,
+            true,
           );
           break;
 
@@ -632,21 +652,22 @@ class PolarVisRow {
               MAG_FILTER_PRESENTATION_OPTIONS,
             ],
             [
-              genSmoothieLegendInfo("― Filtered X-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Filtered Y-axis (mG)", 10, 5),
-              genSmoothieLegendInfo("― Filtered Z-axis (mG)", 10, 5),
-              genSmoothieLegendInfo(
-                "― Filtered accelerometer magnitude (mG)",
-                10,
-                5,
-              ),
+              genSmoothieLegendInfo("― X-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Y-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Z-axis (mG)", 10, 0),
+              genSmoothieLegendInfo("― Accelerometer magnitude (mG)", 10, 0),
             ],
             true,
             this.ACC_FILTER_MIN,
             this.ACC_FILTER_MAX,
+            1,
+            1,
             `${prettyPrintFilter(this.acc_filter_info)} on accelerometer raw magnitude`,
             false,
             [],
+            true,
+            true,
+            true,
           );
           break;
       }
@@ -655,7 +676,7 @@ class PolarVisRow {
   };
 
   onWheelECG = (ev: any) => {
-    if (this.ecg_chart !== undefined) {
+    if (this.ecg_chart !== undefined && !this.ecg_chart.yScaleIsAuto()) {
       const delta = ev.deltaY < 0 ? ECG_DELTA : -ECG_DELTA;
       switch (this.ECGFormSelect?.selectedIndex) {
         case 0:
@@ -701,7 +722,7 @@ class PolarVisRow {
   };
 
   onWheelACC = (ev: any) => {
-    if (this.acc_chart !== undefined) {
+    if (this.acc_chart !== undefined && !this.acc_chart.yScaleIsAuto()) {
       let delta = 0;
       switch (this.ACCFormSelect?.selectedIndex) {
         case 0:
@@ -1253,7 +1274,7 @@ class PolarVisRow {
     // filterConfigBtn
 
     this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
-      "full-width-height",
+      "visContainer",
     ]);
   }
 
@@ -1266,16 +1287,6 @@ class PolarVisRow {
       "form-group",
     ]);
     this.generateECGFormSelect();
-    // this.ECGFormSelect = createSelect(
-    //   "ECGFormSelect",
-    //   this.ECGDropDown,
-    //   ["form-select", "dark-select", "select-sm", "almost-full-width"],
-    //   "",
-    //   ECG_DATA_OPTIONS,
-    // );
-    // this.ECGFormSelect.selectedIndex = 0;
-    // this.ECGFormSelect.onchange = this.changeECGGraph;
-    // this.ECGFormSelect.disabled = true;
 
     this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
     const ACC_switch = createSwitch("ACC", this.onToggleACC);
@@ -1285,16 +1296,6 @@ class PolarVisRow {
       "form-group",
     ]);
     this.generateACCFormSelect();
-    //   this.ACCFormSelect = createSelect(
-    //     "ACCFormSelect",
-    //     this.ACCDropDown,
-    //     ["form-select", "dark-select", "select-sm", "almost-full-width"],
-    //     "",
-    //     ACC_DATA_OPTIONS,
-    //   );
-    //   this.ACCFormSelect.selectedIndex = 0;
-    //   this.ACCFormSelect.onchange = this.changeACCGraph;
-    //   this.ACCFormSelect.disabled = true;
   }
 
   private generateECGFormSelect(

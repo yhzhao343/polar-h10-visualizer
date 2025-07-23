@@ -97,7 +97,9 @@ export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   nonRealtimeData: true,
   millisPerPixel: 8,
   scaleSmoothing: 0.1,
-  tooltip: true,
+  tooltip: false,
+  minValueScale: 1,
+  maxValueScale: 1,
 };
 
 export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
@@ -125,13 +127,15 @@ export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
   nonRealtimeData: true,
   millisPerPixel: 8,
   scaleSmoothing: 0.1,
-  tooltip: true,
+  tooltip: false,
+  minValueScale: 1.3,
+  maxValueScale: 1.3,
 };
 
 export const ECG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "#ebebebcc",
+  strokeStyle: "#fbfbfbcc",
 };
 
 export const ECG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
@@ -204,7 +208,7 @@ export const THETA_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 export const MAG_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
   interpolation: "linear",
-  strokeStyle: "#ebebebcc",
+  strokeStyle: "#fbfbfbcc",
 };
 
 export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
@@ -214,25 +218,25 @@ export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 };
 
 export const X_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#f0883e",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f0883e",
+  };
 
 export const Y_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#f778ba",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f778ba",
+  };
 
 export const Z_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#388afd",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#388afd",
+  };
 
 export const MAG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
