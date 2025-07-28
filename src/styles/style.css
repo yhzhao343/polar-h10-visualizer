@@ -69,6 +69,11 @@ div.container {
   padding-top: 5px;
 }
 
+span.sliderLabel {
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
 div.content {
   height: 100%;
   flex-grow: 1;
@@ -128,6 +133,10 @@ div.bodypart-select {
   padding-bottom: 5px;
 }
 
+.hide {
+  display: none;
+}
+
 .data-info {
   justify-content: left;
   text-align: left;
@@ -143,8 +152,24 @@ div.bodypart-select {
   width: 90%;
 }
 
-.eight-width {
+.eighty-width {
   width: 80%;
+}
+
+.sixty-width {
+  width: 60%;
+}
+
+.fourty-width {
+  width: 40%;
+}
+
+.thirty-width {
+  width: 30%;
+}
+
+.seventy-width {
+  width: 70%;
 }
 
 .half-width {
@@ -183,6 +208,18 @@ div.disconnect {
 
 .padright-5px {
   padding-right: 5px;
+}
+
+.padright-15px {
+  padding-right: 15px;
+}
+
+.marginright-15px {
+  margin-right: 15px;
+}
+
+.padleft-5px {
+  padding-left: 5px;
 }
 
 .pad-left-right-5 {
@@ -227,7 +264,7 @@ div.polar-sensor-left-panel {
   justify-content: center;
 }
 
-select.dark-select {
+.dark-input {
   background-color: #181a1b !important;
   /*width: 95% !important;*/
   color: #e8e8e8;
@@ -235,4 +272,43 @@ select.dark-select {
 
 .form-switch {
   margin: 0;
+}
+
+.bold-text {
+  font-weight: bold;
+}
+
+.flex-grow {
+  flex-grow: 1;
+}
+
+.stream-delay-input-width {
+  width: 4em;
+}
+
+.custom-bodypart-input-width {
+  width: 14em;
+}
+
+.config-div {
+  border-left: 2px solid #79797e;
+  /*border-right: 2px solid #79797e;*/
+}
+
+.hide-overflow {
+  display: hide-overflow;
+}
+
+/*input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+}
+input[type="number"]::-webkit-inner-spin-button:hover,
+input[type="number"]::-webkit-outer-spin-button:hover {
+  background-color: #1d201f;
+}
+*/
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(1);
 }

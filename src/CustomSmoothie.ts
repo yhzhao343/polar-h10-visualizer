@@ -248,10 +248,9 @@ export class CustomSmoothie extends SmoothieChart {
   override streamTo(canvas: HTMLCanvasElement, delayMillis?: number): void {
     super.streamTo(canvas, delayMillis);
     if ("canvas" in this) {
-      (this.canvas as HTMLCanvasElement).addEventListener(
-        "click",
-        this.canvasOnClick,
-      );
+      const canvas = this.canvas as HTMLCanvasElement;
+      canvas.removeEventListener("click", this.canvasOnClick);
+      canvas.addEventListener("click", this.canvasOnClick);
     }
   }
 
@@ -265,6 +264,14 @@ export class CustomSmoothie extends SmoothieChart {
       }
     }
   }
+
+  // modifyStreamDelayMs(delayMs: number) {
+  //   this.stop();
+  //   if ("delay" in this) {
+  //     this.delay = delayMs;
+  //   }
+  //   this.start();
+  // }
 
   renderLegend(canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");

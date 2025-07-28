@@ -59,6 +59,8 @@ export const ECG_RMS_SCROLL_MIN = 5;
 export const ECG_DELTA = 1;
 
 export const ACC_STREAM_DELAY_MS = 600;
+export const ACC_RANGE_OPTIONS = [2, 4, 8];
+export const ACC_SAMPLE_RATE_OPTIONS = [25, 50, 100, 200];
 export const ACC_SAMPLE_RATE_HZ = 100;
 export const ACC_RANGE_G = 4;
 export const ACC_MIN = -2000;
@@ -76,6 +78,16 @@ export const ACC_FILTER_MIN = -20;
 export const ACC_FILTER_MAX = 20;
 export const ACC_MAG_DELTA = 1;
 export const ACC_MAG_SCROLL_MIN = 1;
+export const DEFAULT_MILLIS_PER_PX = 8;
+
+export const ECG_STREAM_DELAY_MIN_MS = 0;
+export const ECG_STREAM_DELAY_MAX_MS = 800;
+export const ECG_MS_PER_PX_MIN = 1;
+export const ECG_MS_PER_PX_MAX = 30;
+export const ACC_STREAM_DELAY_MIN_MS = 0;
+export const ACC_STREAM_DELAY_MAX_MS = 800;
+export const ACC_MS_PER_PX_MIN = 1;
+export const ACC_MS_PER_PX_MAX = 30;
 
 export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   limitFPS: 60,
@@ -95,7 +107,7 @@ export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   },
   responsive: false,
   nonRealtimeData: true,
-  millisPerPixel: 8,
+  millisPerPixel: DEFAULT_MILLIS_PER_PX,
   scaleSmoothing: 0.1,
   tooltip: false,
   minValueScale: 1,
@@ -125,7 +137,7 @@ export const DEFAULT_ACC_LINE_CHART_OPTION: IChartOptions = {
   },
   responsive: false,
   nonRealtimeData: true,
-  millisPerPixel: 8,
+  millisPerPixel: DEFAULT_MILLIS_PER_PX,
   scaleSmoothing: 0.1,
   tooltip: false,
   minValueScale: 1,
