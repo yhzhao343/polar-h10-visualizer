@@ -27,6 +27,9 @@ import {
   MAG_LP_PRESENTATION_OPTIONS,
   PolarH10Data,
   ECG_RMS_WINDOW_MS,
+  ECG_RMS_WIN_MIN_MS,
+  ECG_RMS_WIN_MAX_MS,
+  ECG_RMS_WIN_STEP_MS,
   ECG_RMS_WINDOW_SIZE,
   ECG_STREAM_DELAY_MS,
   ECG_RMS_MIN,
@@ -36,7 +39,9 @@ import {
   ACC_FILTER_MIN,
   ACC_FILTER_MAX,
   ACC_MAG_DELTA,
-  ECG_HIGHPASS_CUTOFF_HZ,
+  ECG_HIGHLOWPASS_CUTOFF_HZ,
+  ECG_BANDPASS_LOW_CUT_HZ,
+  ECG_BANDPASS_HIGH_CUT_HZ,
   ECG_FILTER_ORDER,
   AAC_LOWPASS_CUTOFF_HZ,
   AAC_LOWPASS_ORDER,
@@ -60,14 +65,23 @@ import {
   DEFAULT_MILLIS_PER_PX,
   ECG_STREAM_DELAY_MIN_MS,
   ECG_STREAM_DELAY_MAX_MS,
+  ECG_STREAM_DELAY_STEP_MS,
   ECG_MS_PER_PX_MIN,
   ECG_MS_PER_PX_MAX,
+  ECG_MS_PER_PX_STEP,
   ACC_STREAM_DELAY_MIN_MS,
   ACC_STREAM_DELAY_MAX_MS,
+  ACC_STREAM_DELAY_STEP_MS,
+  ECG_BAND_LOW_MIN_HZ,
+  ECG_BAND_HiGH_MAX_HZ,
+  ECG_BAND_HiGH_STEP_HZ,
   ACC_MS_PER_PX_MIN,
   ACC_MS_PER_PX_MAX,
+  ACC_MS_PER_PX_STEP,
   ACC_RANGE_OPTIONS,
   ACC_SAMPLE_RATE_OPTIONS,
+  FILTER_TYPES,
+  FILTER_CHARACTERISTICS,
 } from "./consts";
 
 type ConditionChecker = (row: PolarVisRow) => boolean;
@@ -110,7 +124,7 @@ class PolarVisRow {
 
   ECGConfigDiv: HTMLDivElement;
   ECGChartConfigDiv: HTMLDivElement;
-  ECGHPConfigDiv: HTMLDivElement;
+  ECGFilterConfigDiv: HTMLDivElement;
   ECGRMSConfigDiv: HTMLDivElement;
 
   customBodyPartInput: HTMLInputElement;
@@ -148,15 +162,12 @@ class PolarVisRow {
   ECGDiv: HTMLElement | undefined = undefined;
   ACCDiv: HTMLElement | undefined = undefined;
 
-  ECGstreamDelaySlider: HTMLInputElement | undefined = undefined;
   ECGStreamDelayInput: HTMLInputElement | undefined = undefined;
   ECGstreamMPPInput: HTMLInputElement | undefined = undefined;
-  ECGstreamMPPSlider: HTMLInputElement | undefined = undefined;
+  ECGRMSWinInput: HTMLInputElement | undefined = undefined;
 
-  ACCstreamDelaySlider: HTMLInputElement | undefined = undefined;
   ACCStreamDelayInput: HTMLInputElement | undefined = undefined;
   ACCstreamMPPInput: HTMLInputElement | undefined = undefined;
-  ACCstreamMPPSlider: HTMLInputElement | undefined = undefined;
 
   ecg_resize: (() => void) | undefined = undefined;
   ecg_chart: CustomSmoothie | undefined = undefined;
@@ -171,9 +182,10 @@ class PolarVisRow {
   ecg_filter_ts: TimeSeries | undefined = undefined;
   ecg_rms_ts: TimeSeries | undefined = undefined;
 
-  ecg_ss_win: Float64Array | undefined = undefined;
-  ecg_ss_win_i: number = 0;
-  ecg_ss: number = 0;
+  ecg_mss_win: Float64Array | undefined = undefined;
+  ecg_mss_win_i: number = 0;
+  ecg_buf_head: number = 0;
+  ecg_mss: number = 0;
 
   acc_resize: (() => void) | undefined = undefined;
   acc_chart: CustomSmoothie | undefined = undefined;
@@ -212,6 +224,7 @@ class PolarVisRow {
   acc_mag_filter_ts: TimeSeries | undefined = undefined;
 
   ecg_rms_window_ms: number = ECG_RMS_WINDOW_MS;
+  ecg_rms_window_size: number = ECG_RMS_WINDOW_SIZE;
   ecg_stream_delay: number = ECG_STREAM_DELAY_MS;
   acc_stream_delay: number = ACC_STREAM_DELAY_MS;
   ecg_millis_per_px: number = DEFAULT_MILLIS_PER_PX;
@@ -228,6 +241,12 @@ class PolarVisRow {
   acc_sample_rate_hz: number = ACC_SAMPLE_RATE_HZ;
   ACCSampleRateSelect: HTMLSelectElement | undefined = undefined;
   ACCRangeSelect: HTMLSelectElement | undefined = undefined;
+  ECGFilterTypesSelect: HTMLSelectElement | undefined = undefined;
+  ECGFilteCharSelect: HTMLSelectElement | undefined = undefined;
+  ECGFilterOrderInput: HTMLInputElement | undefined = undefined;
+  ECGFilterCutoffInput: HTMLInputElement | undefined = undefined;
+  ECGFilterHighCutInput: HTMLInputElement | undefined = undefined;
+  ECGFilterLowCutInput: HTMLInputElement | undefined = undefined;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -237,8 +256,23 @@ class PolarVisRow {
     this.device = device;
     this.deviceName = this.device?.name?.substring(10) || "";
     this.ecg_rms_window_ms = ECG_RMS_WINDOW_MS;
+    this.updateECGRMSWinSize();
     this.initFilterSettings();
     this.showVisConfig = false;
+  }
+
+  updateECGRMSWinSize() {
+    this.ecg_rms_window_size = Math.round(
+      ECG_SAMPLE_RATE_HZ / (1000 / this.ecg_rms_window_ms),
+    );
+  }
+
+  updateECGRMSWin() {
+    // this.ecg_rms
+    this.ecg_mss_win_i = 0;
+    this.ecg_buf_head = 0;
+    this.ecg_mss = 0;
+    this.ecg_mss_win = new Float64Array(this.ecg_rms_window_ms);
   }
 
   initECGFilterSettings() {
@@ -247,10 +281,10 @@ class PolarVisRow {
       order: ECG_FILTER_ORDER,
       characteristic: "butterworth",
       Fs: ECG_SAMPLE_RATE_HZ,
-      Fc: ECG_HIGHPASS_CUTOFF_HZ,
-      Fl: undefined,
-      Fh: undefined,
-      BW: undefined,
+      Fc: ECG_HIGHLOWPASS_CUTOFF_HZ,
+      Fl: ECG_BANDPASS_LOW_CUT_HZ,
+      Fh: ECG_BANDPASS_HIGH_CUT_HZ,
+      BW: ECG_BANDPASS_HIGH_CUT_HZ - ECG_BANDPASS_LOW_CUT_HZ,
       gain: undefined,
       preGain: false,
     };
@@ -263,8 +297,8 @@ class PolarVisRow {
       characteristic: "butterworth",
       Fs: this.acc_sample_rate_hz,
       Fc: AAC_LOWPASS_CUTOFF_HZ,
-      Fl: undefined,
-      Fh: undefined,
+      Fl: 1,
+      Fh: 10,
       BW: undefined,
       gain: undefined,
       preGain: false,
@@ -289,6 +323,13 @@ class PolarVisRow {
   initFilterSettings() {
     this.initECGFilterSettings();
     this.initACCFilterSettings();
+  }
+
+  updateBandpass(filter_info: FilterInfo) {
+    if (filter_info.Fh !== undefined && filter_info.Fl != undefined) {
+      filter_info.BW = filter_info.Fh - filter_info.Fl;
+      filter_info.Fc = Math.sqrt(filter_info.Fh * filter_info.Fl);
+    }
   }
 
   disconnectPolarH10 = async (ev: any = undefined) => {
@@ -414,21 +455,22 @@ class PolarVisRow {
         const timestamp = timeOffset + plotDelay;
         const sample_i = (data.samples as Int32Array)[s_i];
         const filtered_sample_i = this.ecg_filter_iir.singleStep(sample_i);
-        const filtered_sample_squared_i = filtered_sample_i * filtered_sample_i;
+        const filtered_sample_squared_n_i =
+          (filtered_sample_i / this.ecg_rms_window_size) * filtered_sample_i;
         let data_rms_i: number | undefined = undefined;
-        if (this.ecg_ss_win !== undefined) {
-          this.ecg_ss += filtered_sample_squared_i;
-          if (this.ecg_ss_win_i < ECG_RMS_WINDOW_SIZE) {
-            this.ecg_ss_win[this.ecg_ss_win_i] = filtered_sample_squared_i;
-            this.ecg_ss_win_i++;
+        if (this.ecg_mss_win !== undefined) {
+          this.ecg_mss += filtered_sample_squared_n_i;
+          if (this.ecg_mss_win_i < this.ecg_rms_window_size) {
+            this.ecg_mss_win[this.ecg_mss_win_i] = filtered_sample_squared_n_i;
+            this.ecg_mss_win_i++;
           } else {
-            this.ecg_ss -= this.ecg_ss_win[0];
-            this.ecg_ss_win.set(this.ecg_ss_win.subarray(1));
-            this.ecg_ss_win[ECG_RMS_WINDOW_SIZE - 1] =
-              filtered_sample_squared_i;
+            this.ecg_mss -= this.ecg_mss_win[this.ecg_buf_head];
+            this.ecg_mss_win[this.ecg_buf_head] = filtered_sample_squared_n_i;
+            this.ecg_buf_head =
+              (this.ecg_buf_head + 1) % this.ecg_rms_window_size;
           }
-          if (this.ecg_ss_win_i === ECG_RMS_WINDOW_SIZE) {
-            data_rms_i = Math.sqrt(this.ecg_ss / ECG_RMS_WINDOW_SIZE);
+          if (this.ecg_mss_win_i === this.ecg_rms_window_size) {
+            data_rms_i = Math.sqrt(this.ecg_mss);
           }
         }
         setTimeout(() => {
@@ -584,7 +626,7 @@ class PolarVisRow {
             this.ECG_RMS_MAX,
             1,
             1,
-            `RMS using ${this.ecg_rms_window_ms}ms window on filtered EXG`,
+            `RMS using ${this.ecg_rms_window_ms}ms window on ${prettyPrintFilter(this.ecg_filter_info, false)} EXG`,
             false,
             [],
             true,
@@ -902,9 +944,9 @@ class PolarVisRow {
       this.ecg_chart.streamTo(this.ecg_canvas, this.ecg_stream_delay);
 
       // this.ecg_chart.addPostRenderCallback(ECG_legend);
-      this.ecg_ss_win = new Float64Array(ECG_RMS_WINDOW_SIZE);
-      this.ecg_ss_win_i = 0;
-      this.ecg_ss = 0;
+
+      this.updateECGRMSWinSize();
+      this.updateECGRMSWin();
 
       this.ecg_resize = resizeSmoothieGen(this.ecg_chart, 1, 1);
       this.ecg_resize_observer = new ResizeObserver((entries) => {
@@ -915,10 +957,7 @@ class PolarVisRow {
         }
       });
       this.ecg_resize_observer.observe(this.ECGDiv);
-      this.ecg_filter_iir_coef = IIRCalc[this.ecg_filter_info.type](
-        this.ecg_filter_info,
-      );
-      this.ecg_filter_iir = IirFilter(this.ecg_filter_iir_coef);
+      this.ecgFilterCoefReset();
       this.ecg_resize();
 
       if (this.ECGFormSelect !== undefined) {
@@ -1204,7 +1243,7 @@ class PolarVisRow {
     this.ecg_canvas = undefined;
     this.ECGDiv = undefined;
     this.ecg_resize = undefined;
-    this.ecg_ss_win = undefined;
+    this.ecg_mss_win = undefined;
     this.ecg_chart = undefined;
     this.ecg_ts = undefined;
     this.ecg_filter_ts = undefined;
@@ -1212,8 +1251,8 @@ class PolarVisRow {
     this.ecg_resize_observer = undefined;
     this.ecg_filter_iir_coef = undefined;
     this.ecg_filter_iir = undefined;
-    this.ecg_ss_win_i = 0;
-    this.ecg_ss = 0;
+    this.ecg_mss_win_i = 0;
+    this.ecg_mss = 0;
     // this.configureECGGraph = undefined;
   }
 
@@ -1416,6 +1455,7 @@ class PolarVisRow {
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
       BODY_PARTS,
+      undefined,
       getPolarRowId,
     );
     this.bodypartSelect.addEventListener("change", this.onBodypartSelect);
@@ -1457,10 +1497,6 @@ class PolarVisRow {
     if (this.ECGStreamDelayInput !== undefined) {
       this.ECGStreamDelayInput.value = ev.target.value;
     }
-    if (this.ECGstreamDelaySlider !== undefined) {
-      this.ECGstreamDelaySlider.value = ev.target.value;
-      this.ECGstreamDelaySlider.setAttribute("data-tooltip", ev.target.value);
-    }
     if (this.ecg_chart !== undefined) {
       if ("delay" in this.ecg_chart) {
         this.ecg_chart.stop();
@@ -1468,6 +1504,20 @@ class PolarVisRow {
         this.ecg_chart.start();
       }
     }
+  };
+
+  onECGRMSWinInput = (ev: any) => {
+    let rms_input = parseFloat(ev.target.value);
+    if (rms_input < ECG_RMS_WIN_MIN_MS) {
+      rms_input = ECG_RMS_WIN_MIN_MS;
+    }
+    if (rms_input > ECG_RMS_WIN_MAX_MS) {
+      rms_input = ECG_RMS_WIN_MAX_MS;
+    }
+    this.ecg_rms_window_ms = rms_input;
+    this.updateECGRMSWinSize();
+    this.updateECGRMSWin();
+    this.ecgFilterSelectGraphRestart();
   };
 
   onACCStreamDelayChange = (ev: any) => {
@@ -1481,10 +1531,6 @@ class PolarVisRow {
     this.acc_stream_delay = ev.target.valueAsNumber;
     if (this.ACCStreamDelayInput !== undefined) {
       this.ACCStreamDelayInput.value = ev.target.value;
-    }
-    if (this.ACCstreamDelaySlider !== undefined) {
-      this.ACCstreamDelaySlider.value = ev.target.value;
-      this.ACCstreamDelaySlider.setAttribute("data-tooltip", ev.target.value);
     }
     if (this.acc_chart !== undefined) {
       if ("delay" in this.acc_chart) {
@@ -1507,10 +1553,6 @@ class PolarVisRow {
     if (this.ECGstreamMPPInput !== undefined) {
       this.ECGstreamMPPInput.value = ev.target.value;
     }
-    if (this.ECGstreamMPPSlider !== undefined) {
-      this.ECGstreamMPPSlider.value = ev.target.value;
-      this.ECGstreamMPPSlider.setAttribute("data-tooltip", ev.target.value);
-    }
     if (this.ecg_chart !== undefined) {
       this.ecg_chart.stop();
       this.ecg_chart.options.millisPerPixel = this.ecg_millis_per_px;
@@ -1529,10 +1571,6 @@ class PolarVisRow {
     this.acc_millis_per_px = ev.target.valueAsNumber;
     if (this.ACCstreamMPPInput !== undefined) {
       this.ACCstreamMPPInput.value = ev.target.value;
-    }
-    if (this.ACCstreamMPPSlider !== undefined) {
-      this.ACCstreamMPPSlider.value = ev.target.value;
-      this.ACCstreamMPPSlider.setAttribute("data-tooltip", ev.target.value);
     }
     if (this.acc_chart !== undefined) {
       this.acc_chart.stop();
@@ -1574,6 +1612,146 @@ class PolarVisRow {
     await this.restartAllACC();
   };
 
+  onECGFilterType = (ev: any) => {
+    const selectedInd = ev.target.selectedIndex;
+    if (selectedInd === 2) {
+      this.ecg_filter_info.Fl = ECG_BANDPASS_LOW_CUT_HZ;
+      this.ecg_filter_info.Fh = ECG_BANDPASS_HIGH_CUT_HZ;
+      this.ecg_filter_info.BW =
+        ECG_BANDPASS_HIGH_CUT_HZ - ECG_BANDPASS_LOW_CUT_HZ;
+      this.ecg_filter_info.Fc = Math.sqrt(
+        ECG_BANDPASS_LOW_CUT_HZ * ECG_BANDPASS_HIGH_CUT_HZ,
+      );
+      if (this.ECGFilterLowCutInput !== undefined) {
+        this.ECGFilterLowCutInput.value = ECG_BANDPASS_LOW_CUT_HZ.toString();
+      }
+      if (this.ECGFilterHighCutInput !== undefined) {
+        this.ECGFilterHighCutInput.value = ECG_BANDPASS_HIGH_CUT_HZ.toString();
+      }
+    } else {
+      this.ecg_filter_info.Fc = ECG_HIGHLOWPASS_CUTOFF_HZ;
+      if (this.ECGFilterCutoffInput !== undefined) {
+        this.ECGFilterCutoffInput.value = ECG_HIGHLOWPASS_CUTOFF_HZ.toString();
+      }
+    }
+    if (this.ECGFilterCutoffInput !== undefined) {
+      if (selectedInd === 2) {
+        this.ECGFilterCutoffInput.classList.add("hide");
+      } else {
+        this.ECGFilterCutoffInput.classList.remove("hide");
+      }
+    }
+    if (this.ECGFilterLowCutInput !== undefined) {
+      if (selectedInd === 2) {
+        this.ECGFilterLowCutInput.classList.remove("hide");
+      } else {
+        this.ECGFilterLowCutInput.classList.add("hide");
+      }
+    }
+    if (this.ECGFilterHighCutInput !== undefined) {
+      if (selectedInd === 2) {
+        this.ECGFilterHighCutInput.classList.remove("hide");
+      } else {
+        this.ECGFilterHighCutInput.classList.add("hide");
+      }
+    }
+    const ECGFilterType = FILTER_TYPES[selectedInd];
+    this.ecg_filter_info.type = ECGFilterType;
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  onECGFilterOrder = (ev: any) => {
+    let newOrder = parseInt(ev.target.value);
+    if (newOrder < 1) {
+      newOrder = 1;
+    }
+    if (newOrder > 12) {
+      newOrder = 12;
+    }
+    this.ecg_filter_info.order = newOrder as FilterInfo["order"];
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  onECGFilterChar = (ev: any) => {
+    const selectedInd = ev.target.selectedIndex;
+    const ECGFilterChar = FILTER_CHARACTERISTICS[selectedInd];
+    this.ecg_filter_info.characteristic = ECGFilterChar;
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  onECGFilterCutoff = (ev: any) => {
+    const cutOff = parseFloat(ev.target.value);
+    this.ecg_filter_info.Fc = cutOff;
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  onECGFilterLowCutoff = (ev: any) => {
+    let cutOff = parseFloat(ev.target.value);
+    if (this.ecg_filter_info.Fh !== undefined) {
+      if (cutOff >= this.ecg_filter_info.Fh) {
+        cutOff = this.ecg_filter_info.Fh - ECG_BAND_HiGH_STEP_HZ;
+      }
+    }
+    if (cutOff > ECG_BAND_HiGH_MAX_HZ) {
+      cutOff = ECG_BAND_LOW_MIN_HZ;
+    }
+    if (cutOff < ECG_BAND_LOW_MIN_HZ) {
+      cutOff = ECG_BAND_LOW_MIN_HZ;
+    }
+
+    this.ecg_filter_info.Fl = cutOff;
+    this.updateBandpass(this.ecg_filter_info);
+    if (this.ECGFilterHighCutInput !== undefined) {
+      this.ECGFilterHighCutInput.min = (
+        cutOff + ECG_BAND_HiGH_STEP_HZ
+      ).toString();
+    }
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  onECGFilterHighCutoff = (ev: any) => {
+    let cutOff = parseFloat(ev.target.value);
+    if (this.ecg_filter_info.Fl !== undefined) {
+      if (cutOff <= this.ecg_filter_info.Fl) {
+        cutOff = this.ecg_filter_info.Fl + ECG_BAND_HiGH_STEP_HZ;
+      }
+    }
+    if (cutOff > ECG_BAND_HiGH_MAX_HZ) {
+      cutOff = ECG_BAND_LOW_MIN_HZ;
+    }
+    if (cutOff < ECG_BAND_LOW_MIN_HZ) {
+      cutOff = ECG_BAND_LOW_MIN_HZ;
+    }
+
+    this.ecg_filter_info.Fh = cutOff;
+    this.updateBandpass(this.ecg_filter_info);
+    if (this.ECGFilterLowCutInput !== undefined) {
+      this.ECGFilterLowCutInput.max = (
+        cutOff - ECG_BAND_HiGH_STEP_HZ
+      ).toString();
+    }
+    this.ecgFilterSelectGraphRestart();
+  };
+
+  ecgFilterSelectGraphRestart() {
+    this.ecgFilterCoefReset();
+    const preSelected = this.ECGFormSelect.selectedIndex;
+    const preDisabled = this.ECGFormSelect.disabled;
+    this.generateECGFormSelect();
+    this.ECGFormSelect.disabled = preDisabled;
+    this.ECGFormSelect.selectedIndex = preSelected;
+    if (preSelected === 1) {
+      this.changeECGGraph({ target: { selectedIndex: preSelected } });
+    }
+  }
+
+  ecgFilterCoefReset() {
+    this.ecg_filter_iir_coef = IIRCalc[this.ecg_filter_info.type](
+      this.ecg_filter_info,
+    );
+    this.ecg_filter_iir = IirFilter(this.ecg_filter_iir_coef);
+  }
+
   async restartAllACC() {
     const ACCOnRows: PolarVisRow[] = [];
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
@@ -1608,14 +1786,14 @@ class PolarVisRow {
     createDiv(
       "ECGChartConfigTitle",
       ECGTitleRow,
-      ["half-width", "center", "bold-text"],
-      "EXG Visualization Configurations",
+      ["fourty-width", "center", "bold-text"],
+      "EXG Visualization Configs",
     );
 
     const customBodypartInputDiv = createDiv(
       "customBodypartInputDiv",
       ECGTitleRow,
-      ["half-width", "flexbox"],
+      ["sixty-width", "flexbox"],
     );
 
     const customBodypartSpan = createSpan(
@@ -1640,7 +1818,7 @@ class PolarVisRow {
     const ECGstreamDelayDiv = createDiv(
       "ECGChartStreamDelay",
       this.ECGChartConfigDiv,
-      ["half-width", "flexbox"],
+      ["full-width", "flexbox"],
     );
 
     createSpan(
@@ -1651,61 +1829,165 @@ class PolarVisRow {
     );
 
     this.ECGStreamDelayInput = createNumInput(
-      "ECGSteamDelayInput",
+      "ECGStreamDelayInput",
       ECGstreamDelayDiv,
-      ["marginright-15px", "dark-input", "stream-delay-input-width"],
+      ["marginright-15px", "dark-input", "input-width-4_5"],
+      ECG_STREAM_DELAY_MIN_MS,
+      ECG_STREAM_DELAY_MAX_MS,
+      ECG_STREAM_DELAY_STEP_MS,
+      this.ecg_stream_delay,
     );
-    this.ECGStreamDelayInput.value = this.ecg_stream_delay.toString();
     this.ECGStreamDelayInput.addEventListener(
       "change",
       this.onECGStreamDelayChange,
     );
 
-    this.ECGstreamDelaySlider = createSlider(
-      "ECGstreamDelaySlider",
-      ECG_STREAM_DELAY_MIN_MS,
-      ECG_STREAM_DELAY_MAX_MS,
-      this.ecg_stream_delay,
-      ECGstreamDelayDiv,
-    );
-    this.ECGstreamDelaySlider.addEventListener(
-      "change",
-      this.onECGStreamDelayChange,
-    );
-
-    const ECGstreamMPPDiv = createDiv(
-      "ECGChartStreamDelay",
-      this.ECGChartConfigDiv,
-      ["half-width", "flexbox"],
-    );
-
     createSpan(
       "ECGStreamDelayLabel",
-      ECGstreamMPPDiv,
+      ECGstreamDelayDiv,
       ["padright-5px", "padleft-5px"],
       "Data width (ms/px):",
     );
 
     this.ECGstreamMPPInput = createNumInput(
-      "ECGSteamDelayInput",
-      ECGstreamMPPDiv,
-      ["marginright-15px", "dark-input", "stream-delay-input-width"],
-    );
-    this.ECGstreamMPPInput.value = this.ecg_millis_per_px.toString();
-    this.ECGstreamMPPInput.addEventListener("change", this.onECGMPPChange);
-
-    this.ECGstreamMPPSlider = createSlider(
-      "ECGstreamMPPSlider",
+      "ECGStreamMPPInput",
+      ECGstreamDelayDiv,
+      ["marginright-15px", "dark-input", "input-width-3_5"],
       ECG_MS_PER_PX_MIN,
       ECG_MS_PER_PX_MAX,
+      ECG_MS_PER_PX_STEP,
       this.ecg_millis_per_px,
-      ECGstreamMPPDiv,
     );
-    this.ECGstreamMPPSlider.addEventListener("change", this.onECGMPPChange);
+    this.ECGstreamMPPInput.addEventListener("change", this.onECGMPPChange);
 
-    this.ECGHPConfigDiv = createDiv("ECGHPConfigDiv", this.ECGConfigDiv, [
-      "full-width",
-    ]);
+    createSpan(
+      "ECGSRMSLabel",
+      ECGstreamDelayDiv,
+      ["padright-5px", "padleft-5px"],
+      "RMS window (ms): ",
+    );
+
+    this.ECGRMSWinInput = createNumInput(
+      "ECGRMSWinInput",
+      ECGstreamDelayDiv,
+      ["marginright-15px", "dark-input", "input-width-4_5"],
+      ECG_RMS_WIN_MIN_MS,
+      ECG_RMS_WIN_MAX_MS,
+      ECG_RMS_WIN_STEP_MS,
+      this.ecg_rms_window_ms,
+    );
+    this.ECGRMSWinInput.addEventListener("change", this.onECGRMSWinInput);
+
+    this.ECGFilterConfigDiv = createDiv(
+      "ECGFilterConfigDiv",
+      this.ECGConfigDiv,
+      ["full-width", "flexbox"],
+    );
+
+    createSpan(
+      "ECGFilterTypeSpan",
+      this.ECGFilterConfigDiv,
+      ["padleft-5px", "padright-5px"],
+      "Filter Type:",
+    );
+    this.ECGFilterTypesSelect = createSelect(
+      "ECGFilterTypesSelect",
+      this.ECGFilterConfigDiv,
+      ["form-select", "dark-input", "select-sm", "filter-type-width"],
+      "",
+      FILTER_TYPES,
+      FILTER_TYPES.indexOf(this.ecg_filter_info.type),
+    );
+    this.ECGFilterTypesSelect.addEventListener("change", this.onECGFilterType);
+
+    createSpan(
+      "ECGFilterCharSpan",
+      this.ECGFilterConfigDiv,
+      ["padleft-5px", "padright-5px"],
+      "Filter Char:",
+    );
+    this.ECGFilteCharSelect = createSelect(
+      "ECGFilteCharSelect",
+      this.ECGFilterConfigDiv,
+      ["form-select", "dark-input", "select-sm", "filter-char-width"],
+      "",
+      FILTER_CHARACTERISTICS,
+      FILTER_CHARACTERISTICS.indexOf(this.ecg_filter_info.characteristic),
+    );
+    this.ECGFilteCharSelect.addEventListener("change", this.onECGFilterChar);
+
+    createSpan(
+      "ECGFilterOrderSpan",
+      this.ECGFilterConfigDiv,
+      ["padleft-5px", "padright-5px"],
+      "Order:",
+    );
+
+    this.ECGFilterOrderInput = createNumInput(
+      "ECGFilterOrderInput",
+      this.ECGFilterConfigDiv,
+      ["dark-input", "input-width-3_5"],
+      1,
+      12,
+      1,
+      this.ecg_filter_info.order,
+    );
+
+    createSpan(
+      "ECGFilterCutoffSpan",
+      this.ECGFilterConfigDiv,
+      ["padleft-5px", "padright-5px"],
+      "Cutoff (Hz):",
+    );
+
+    this.ECGFilterCutoffInput = createNumInput(
+      "ECGFilterCutoffInput",
+      this.ECGFilterConfigDiv,
+      ["dark-input", "freq-input-width"],
+      ECG_BAND_LOW_MIN_HZ,
+      ECG_BAND_HiGH_MAX_HZ,
+      ECG_BAND_HiGH_STEP_HZ,
+      this.ecg_filter_info.Fc,
+    );
+    this.ECGFilterCutoffInput.addEventListener(
+      "change",
+      this.onECGFilterCutoff,
+    );
+
+    this.ECGFilterLowCutInput = createNumInput(
+      "ECGFilterLowCutInput",
+      this.ECGFilterConfigDiv,
+      ["margin-left-right-5", "dark-input", "freq-input-width", "hide"],
+      ECG_BAND_LOW_MIN_HZ,
+      this.ecg_filter_info.Fh,
+      ECG_BAND_HiGH_STEP_HZ,
+      this.ecg_filter_info.Fl,
+    );
+    this.ECGFilterLowCutInput.addEventListener(
+      "change",
+      this.onECGFilterLowCutoff,
+    );
+
+    this.ECGFilterHighCutInput = createNumInput(
+      "ECGFilterHighCutInput",
+      this.ECGFilterConfigDiv,
+      ["margin-left-right-5", "dark-input", "freq-input-width", "hide"],
+      this.ecg_filter_info.Fl,
+      ECG_BAND_HiGH_MAX_HZ,
+      ECG_BAND_HiGH_STEP_HZ,
+      this.ecg_filter_info.Fh,
+    );
+    this.ECGFilterHighCutInput.addEventListener(
+      "change",
+      this.onECGFilterHighCutoff,
+    );
+
+    if (this.ECGFilterTypesSelect.selectedIndex === 2) {
+      this.ECGFilterCutoffInput.classList.add("hide");
+      this.ECGFilterLowCutInput.classList.remove("hide");
+      this.ECGFilterHighCutInput.classList.remove("hide");
+    }
+
     this.ECGRMSConfigDiv = createDiv("ECGRMSConfigDiv", this.ECGConfigDiv, [
       "full-width",
     ]);
@@ -1728,7 +2010,7 @@ class PolarVisRow {
       "ACCChartConfigTitle",
       ACCTitleRow,
       ["half-width", "center", "bold-text"],
-      "Accelerometer Visualization Configurations",
+      "Accelerometer Visualization Configs",
     );
 
     const ACCSampleRateRange = createDiv("ACCSampleRateRange", ACCTitleRow, [
@@ -1738,18 +2020,16 @@ class PolarVisRow {
       "ACCSampleRateSpan",
       ACCSampleRateRange,
       ["padright-5px", "padleft-5px"],
-      "Sample Rate (Hz):",
+      "Fs (Hz):",
     );
 
     this.ACCSampleRateSelect = createSelect(
       "ACCSampleRateSelect",
       ACCSampleRateRange,
-      ["dark-input"],
+      ["form-select", "dark-input", "select-sm", "input-width-4_5"],
       "",
       ACC_SAMPLE_RATE_OPTIONS,
-    );
-    this.ACCSampleRateSelect.selectedIndex = ACC_SAMPLE_RATE_OPTIONS.indexOf(
-      this.acc_sample_rate_hz,
+      ACC_SAMPLE_RATE_OPTIONS.indexOf(this.acc_sample_rate_hz),
     );
     this.ACCSampleRateSelect.addEventListener(
       "change",
@@ -1766,13 +2046,12 @@ class PolarVisRow {
     this.ACCRangeSelect = createSelect(
       "ACCRangeSelect",
       ACCSampleRateRange,
-      ["dark-input"],
+      ["form-select", "dark-input", "select-sm", "input-width-3_5"],
       "",
       ACC_RANGE_OPTIONS,
+      ACC_RANGE_OPTIONS.indexOf(this.acc_range_g),
     );
-    this.ACCRangeSelect.selectedIndex = ACC_RANGE_OPTIONS.indexOf(
-      this.acc_range_g,
-    );
+
     this.ACCRangeSelect.addEventListener("change", this.onACCRangeSelect);
 
     this.ACCChartConfigDiv = createDiv("ACCChartConfigDiv", this.ACCConfigDiv, [
@@ -1780,72 +2059,50 @@ class PolarVisRow {
       "flexbox",
     ]);
 
-    const ACCstreamDelayDiv = createDiv(
-      "ACCChartStreamDelay",
+    const ACCDisplaySettingsDiv = createDiv(
+      "ACCDisplaySettingsDiv",
       this.ACCChartConfigDiv,
-      ["half-width", "flexbox"],
+      ["full-width", "flexbox"],
     );
 
     createSpan(
       "ACCStreamDelayLabel",
-      ACCstreamDelayDiv,
+      ACCDisplaySettingsDiv,
       ["padright-5px", "padleft-5px"],
       "Delay (ms):",
     );
 
     this.ACCStreamDelayInput = createNumInput(
-      "ACCSteamDelayInput",
-      ACCstreamDelayDiv,
-      ["marginright-15px", "dark-input", "stream-delay-input-width"],
+      "ACCStreamDelayInput",
+      ACCDisplaySettingsDiv,
+      ["marginright-15px", "dark-input", "input-width-4_5"],
+      ACC_STREAM_DELAY_MIN_MS,
+      ACC_STREAM_DELAY_MAX_MS,
+      ACC_STREAM_DELAY_STEP_MS,
+      this.acc_stream_delay,
     );
-    this.ACCStreamDelayInput.value = this.acc_stream_delay.toString();
     this.ACCStreamDelayInput.addEventListener(
       "change",
       this.onACCStreamDelayChange,
     );
 
-    this.ACCstreamDelaySlider = createSlider(
-      "ACCstreamDelaySlider",
-      ACC_STREAM_DELAY_MIN_MS,
-      ACC_STREAM_DELAY_MAX_MS,
-      this.acc_stream_delay,
-      ACCstreamDelayDiv,
-    );
-    this.ACCstreamDelaySlider.addEventListener(
-      "change",
-      this.onACCStreamDelayChange,
-    );
-
-    const ACCstreamMPPDiv = createDiv(
-      "ACCChartStreamDelay",
-      this.ACCChartConfigDiv,
-      ["half-width", "flexbox"],
-    );
-
     createSpan(
       "ACCStreamDelayLabel",
-      ACCstreamMPPDiv,
+      ACCDisplaySettingsDiv,
       ["padright-5px", "padleft-5px"],
       "Data width (ms/px):",
     );
 
     this.ACCstreamMPPInput = createNumInput(
-      "ACCSteamDelayInput",
-      ACCstreamMPPDiv,
-      ["marginright-15px", "dark-input", "stream-delay-input-width"],
+      "ACCSteamMPPInput",
+      ACCDisplaySettingsDiv,
+      ["marginright-15px", "dark-input", "input-width-3_5"],
+      ACC_MS_PER_PX_MIN,
+      ACC_MS_PER_PX_MAX,
+      ACC_MS_PER_PX_STEP,
     );
     this.ACCstreamMPPInput.value = this.acc_millis_per_px.toString();
     this.ACCstreamMPPInput.addEventListener("change", this.onACCMPPChange);
-
-    this.ACCstreamMPPSlider = createSlider(
-      "ACCstreamMPPSlider",
-      ACC_MS_PER_PX_MIN,
-      ACC_MS_PER_PX_MAX,
-      this.acc_millis_per_px,
-      ACCstreamMPPDiv,
-    );
-
-    this.ACCstreamMPPSlider.addEventListener("change", this.onACCMPPChange);
 
     this.ACCHPConfigDiv = createDiv("ACCHPConfigDiv", this.ACCConfigDiv, [
       "full-width",
@@ -1888,9 +2145,13 @@ class PolarVisRow {
       this.ECGDropDown,
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
-      ["Raw", compactPrettyPrintFilter(this.ecg_filter_info), "RMS"],
+      [
+        "Raw",
+        compactPrettyPrintFilter(this.ecg_filter_info),
+        `${this.ecg_rms_window_ms}ms RMS`,
+      ],
+      selectedInd,
     );
-    this.ECGFormSelect.selectedIndex = selectedInd;
     this.ECGFormSelect.onchange = this.changeECGGraph;
     this.ECGFormSelect.disabled = disabled;
   }
@@ -1914,8 +2175,8 @@ class PolarVisRow {
         "Tilt",
         compactPrettyPrintFilter(this.acc_filter_info),
       ],
+      selectedInd,
     );
-    this.ACCFormSelect.selectedIndex = selectedInd;
     this.ACCFormSelect.onchange = this.changeACCGraph;
     this.ACCFormSelect.disabled = disabled;
   }
@@ -2073,11 +2334,15 @@ function createSelect(
   classList: string[] = [],
   textContent: string = "",
   options: string[] | number[] = [],
+  selectedInd: number | undefined = undefined,
   idGenerator: () => number = getPolarRowId,
 ) {
   const select = document.createElement("select");
   configureHTMLElement(select, id, parent, classList, textContent, idGenerator);
   addOptionsToSelect(select, options, idGenerator);
+  if (selectedInd !== undefined) {
+    select.selectedIndex = selectedInd;
+  }
   return select;
 }
 
@@ -2111,6 +2376,10 @@ function createNumInput(
   id: string,
   parent: HTMLElement | undefined = undefined,
   classList: string[] = [],
+  min: number = 0,
+  max: number = 100,
+  step: number = 1,
+  val: number = 1,
   textContent: string = "",
   idGenerator: () => number = getPolarRowId,
 ) {
@@ -2124,6 +2393,10 @@ function createNumInput(
     idGenerator,
   );
   myNumInput.setAttribute("type", "number");
+  myNumInput.setAttribute("min", min.toString());
+  myNumInput.setAttribute("max", max.toString());
+  myNumInput.setAttribute("step", step.toString());
+  myNumInput.setAttribute("value", val.toString());
   return myNumInput;
 }
 

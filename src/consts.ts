@@ -45,18 +45,28 @@ export const SCROLL_MAX_LIMIT_FACTOR = 5;
 export const LOW_BATT_LVL = 35;
 
 export const ECG_STREAM_DELAY_MS = 600;
-export const ECG_RMS_WINDOW_MS = 200;
-export const ECG_RMS_WINDOW_SIZE = Math.round(130 / (1000 / ECG_RMS_WINDOW_MS));
 export const ECG_FILTER_MIN = -120;
 export const ECG_FILTER_MAX = 120;
 export const ECG_RMS_MIN = 0;
 export const ECG_RMS_MAX = 120;
-export const ECG_HIGHPASS_CUTOFF_HZ = 25;
+export const ECG_HIGHLOWPASS_CUTOFF_HZ = 25;
+export const ECG_BANDPASS_LOW_CUT_HZ = 1;
+export const ECG_BANDPASS_HIGH_CUT_HZ = 20;
 export const ECG_FILTER_ORDER = 4;
 export const ECG_SAMPLE_RATE_HZ = 130;
 export const ECG_FILTER_SCROLL_MIN = 5;
 export const ECG_RMS_SCROLL_MIN = 5;
 export const ECG_DELTA = 1;
+export const ECG_RMS_WIN_MIN_MS = 20;
+export const ECG_RMS_WIN_MAX_MS = 800;
+export const ECG_RMS_WIN_STEP_MS = 10;
+export const ECG_RMS_WINDOW_MS = 200;
+export const ECG_RMS_WINDOW_SIZE = Math.round(
+  ECG_SAMPLE_RATE_HZ / (1000 / ECG_RMS_WINDOW_MS),
+);
+export const ECG_BAND_LOW_MIN_HZ = 0.7;
+export const ECG_BAND_HiGH_MAX_HZ = 40;
+export const ECG_BAND_HiGH_STEP_HZ = 0.1;
 
 export const ACC_STREAM_DELAY_MS = 600;
 export const ACC_RANGE_OPTIONS = [2, 4, 8];
@@ -82,12 +92,16 @@ export const DEFAULT_MILLIS_PER_PX = 8;
 
 export const ECG_STREAM_DELAY_MIN_MS = 0;
 export const ECG_STREAM_DELAY_MAX_MS = 800;
+export const ECG_STREAM_DELAY_STEP_MS = 1;
 export const ECG_MS_PER_PX_MIN = 1;
 export const ECG_MS_PER_PX_MAX = 30;
+export const ECG_MS_PER_PX_STEP = 0.1;
 export const ACC_STREAM_DELAY_MIN_MS = 0;
 export const ACC_STREAM_DELAY_MAX_MS = 800;
+export const ACC_STREAM_DELAY_STEP_MS = 1;
 export const ACC_MS_PER_PX_MIN = 1;
 export const ACC_MS_PER_PX_MAX = 30;
+export const ACC_MS_PER_PX_STEP = 0.1;
 
 export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   limitFPS: 60,
@@ -282,10 +296,12 @@ export interface PolarH10Data {
   event_time_offset_ms: number;
 }
 
+export const FILTER_TYPES = ["lowpass", "highpass", "bandpass"];
+export const FILTER_CHARACTERISTICS = ["butterworth", "bessel"];
 export interface FilterInfo {
-  type: "lowpass" | "highpass" | "bandpass";
+  type: (typeof FILTER_TYPES)[number];
   order: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
-  characteristic: "butterworth" | "bessel";
+  characteristic: (typeof FILTER_CHARACTERISTICS)[number];
   Fs: number;
   Fc?: number;
   Fl?: number;
