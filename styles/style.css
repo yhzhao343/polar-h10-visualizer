@@ -168,6 +168,26 @@ div.bodypart-select {
   width: 30%;
 }
 
+.twenty-width {
+  width: 20%;
+}
+
+.fifteen-width {
+  width: 15%;
+}
+
+.filter-char-width {
+  width: 7.5em;
+}
+
+.filter-type-width {
+  width: 6.8em;
+}
+
+.ten-width {
+  width: 10%;
+}
+
 .seventy-width {
   width: 70%;
 }
@@ -222,7 +242,7 @@ div.disconnect {
   padding-left: 5px;
 }
 
-.pad-left-right-5 {
+.margin-left-right-5 {
   margin-right: 5px;
   margin-left: 5px;
 }
@@ -282,12 +302,20 @@ div.polar-sensor-left-panel {
   flex-grow: 1;
 }
 
-.stream-delay-input-width {
+.input-width-4_5 {
+  width: 4.5em;
+}
+
+.input-width-3_5 {
+  width: 3.5em;
+}
+
+.freq-input-width {
   width: 4em;
 }
 
 .custom-bodypart-input-width {
-  width: 14em;
+  width: 8em;
 }
 
 .config-div {
