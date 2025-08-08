@@ -25,6 +25,7 @@
   white-space: nowrap;
   word-wrap: normal;
   direction: ltr;
+  vertical-align: text-bottom;
   -webkit-font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
 }
@@ -48,6 +49,10 @@ div.container {
   position: relative;
   margin-left: 5px;
   padding-right: 12px;
+}
+
+.red {
+  color: red;
 }
 
 .center {
@@ -257,6 +262,11 @@ div.disconnect {
 
 .ble-conn {
   float: left;
+  margin: 5px;
+}
+
+.record-conn {
+  float: right;
   margin: 5px;
 }
 
