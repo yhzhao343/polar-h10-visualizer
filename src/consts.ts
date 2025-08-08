@@ -65,8 +65,12 @@ export const ECG_RMS_WINDOW_SIZE = Math.round(
   ECG_SAMPLE_RATE_HZ / (1000 / ECG_RMS_WINDOW_MS),
 );
 export const ECG_BAND_LOW_MIN_HZ = 0.7;
-export const ECG_BAND_HiGH_MAX_HZ = 40;
-export const ECG_BAND_HiGH_STEP_HZ = 0.1;
+export const ECG_BAND_HIGH_MAX_HZ = 40;
+export const ECG_BAND_HIGH_STEP_HZ = 0.1;
+
+export const ACC_BAND_LOW_MIN_HZ = 0.1;
+export const ACC_BAND_HIGH_MAX_HZ = 100;
+export const ACC_BAND_HIGH_STEP_HZ = 0.1;
 
 export const ACC_STREAM_DELAY_MS = 600;
 export const ACC_RANGE_OPTIONS = [2, 4, 8];
@@ -83,9 +87,10 @@ export const ACC_SCROLL_MIN = 100;
 
 export const AAC_FILTER_BANDPASS_HIGH_CUT_HZ = 2.5;
 export const AAC_FILTER_BANDPASS_LOW_CUT_HZ = 0.1;
+export const ACC_FILTER_HIGHLOWPASS_CUTOFF_HZ = AAC_FILTER_BANDPASS_HIGH_CUT_HZ;
 export const AAC_FILTER_ORDER = 4;
-export const ACC_FILTER_MIN = -20;
-export const ACC_FILTER_MAX = 20;
+export const ACC_FILTER_MIN = -1000;
+export const ACC_FILTER_MAX = 1000;
 export const ACC_MAG_DELTA = 1;
 export const ACC_MAG_SCROLL_MIN = 1;
 export const DEFAULT_MILLIS_PER_PX = 8;
