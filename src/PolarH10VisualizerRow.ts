@@ -100,9 +100,55 @@ export async function createPolarVisRow(
   await row.init();
 }
 
-class PolarVisRow {
+export function startRecording() {
+  PolarVisRow.recorded = {};
+  const polarNameDict = {};
+  for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
+    const row = PolarVisRow.polarVisRows[row_i];
+    const polarName = row.getPolarName();
+    if (!(polarName in polarNameDict)) {
+      const polar = row.polarH10;
+      polarNameDict[polarName] = polar;
+      PolarVisRow.recorded[polarName] = {
+        ECG: {
+          data: [],
+          timestamp: [],
+        },
+        ACC: {
+          data_x: [],
+          data_y: [],
+          data_z: [],
+          timestamp: [],
+        },
+      };
+      polar.addEventListener("ECG", row.recordECGData);
+      polar.addEventListener("ACC", row.recordACCData);
+    }
+  }
+}
+export function stopRecording() {
+  const polarNameDict = {};
+  for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
+    const row = PolarVisRow.polarVisRows[row_i];
+    const polarName = row.getPolarName();
+    if (!(polarName in polarNameDict)) {
+      const polar = row.polarH10;
+      polarNameDict[polarName] = polar;
+      polar.removeEventListener("ECG", row.recordECGData);
+      polar.removeEventListener("ACC", row.recordACCData);
+    }
+  }
+  download(
+    "Polar-h10-recored_Data",
+    JSON.stringify(PolarVisRow.recorded, null, 2),
+  );
+  PolarVisRow.recorded = {};
+}
+
+export class PolarVisRow {
   static polarRowID: number = 0;
   static polarVisRows: PolarVisRow[] = [];
+  static recorded = {};
   device: BluetoothDevice;
   polarH10: PolarH10;
   deviceName: string;
@@ -277,6 +323,16 @@ class PolarVisRow {
     this.showVisConfig = false;
   }
 
+  getPolarName() {
+    const alternative_name =
+      this.customBodyPart || BODY_PARTS[this.bodypartSelect.selectedIndex];
+    if (alternative_name.length > 0) {
+      return `${this.deviceName}-${alternative_name}`;
+    } else {
+      return this.deviceName;
+    }
+  }
+
   updateECGRMSWinSize() {
     this.ecg_rms_window_size = Math.round(
       ECG_SAMPLE_RATE_HZ / (1000 / this.ecg_rms_window_ms),
@@ -350,6 +406,51 @@ class PolarVisRow {
       filter_info.Fc = Math.sqrt(filter_info.Fh * filter_info.Fl);
     }
   }
+
+  recordECGData = (data: PolarH10Data) => {
+    if (data.samples !== undefined) {
+      const estimated_sample_interval =
+        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
+        data.samples.length;
+      const timeOffset =
+        data.event_time_offset_ms +
+        data.prev_sample_timestamp_ms +
+        estimated_sample_interval;
+      const polarName = this.getPolarName();
+      for (let s_i = 0; s_i < data.samples.length; s_i++) {
+        const plotDelay = s_i * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const sample_i = (data.samples as Int32Array)[s_i];
+        PolarVisRow.recorded[polarName].ECG.timestamp.push(timestamp);
+        PolarVisRow.recorded[polarName].ECG.data.push(sample_i);
+      }
+    }
+  };
+
+  recordACCData = (data: PolarH10Data) => {
+    if (data.samples !== undefined) {
+      const numFrame = data.samples.length / 3;
+      const estimated_sample_interval =
+        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
+      const timeOffset =
+        data.event_time_offset_ms +
+        data.prev_sample_timestamp_ms +
+        estimated_sample_interval;
+      const polarName = this.getPolarName();
+      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
+        const frameNum = Math.floor(s_i / 3);
+        const plotDelay = frameNum * estimated_sample_interval;
+        const timestamp = timeOffset + plotDelay;
+        const y_d = -(data.samples as Int16Array)[s_i];
+        const x_d = -(data.samples as Int16Array)[s_i + 1];
+        const z_d = (data.samples as Int16Array)[s_i + 2];
+        PolarVisRow.recorded[polarName].ACC.timestamp.push(timestamp);
+        PolarVisRow.recorded[polarName].ACC.data_x.push(x_d);
+        PolarVisRow.recorded[polarName].ACC.data_y.push(y_d);
+        PolarVisRow.recorded[polarName].ACC.data_z.push(z_d);
+      }
+    }
+  };
 
   disconnectPolarH10 = async (ev: any = undefined) => {
     this.removeSelf();
@@ -2981,4 +3082,17 @@ function compactPrettyPrintFilter(filterInfo: FilterInfo) {
     str = `${Number.isInteger(filterInfo.Fl) ? filterInfo.Fl : filterInfo.Fl?.toFixed(1)}-${Number.isInteger(filterInfo.Fh) ? filterInfo.Fh : filterInfo.Fh?.toFixed(1)}Hz ${filterInfo.type}`;
   }
   return str;
+}
+
+export function download(
+  filename: string,
+  content: string,
+  mimeType: string = "application/json",
+) {
+  const a = document.createElement("a"); // Create "a" element
+  const blob = new Blob([content], { type: mimeType }); // Create a blob (file-like object)
+  const url = URL.createObjectURL(blob); // Create an object URL from blob
+  a.setAttribute("href", url); // Set "a" element link
+  a.setAttribute("download", filename); // Set download filename
+  a.click(); // Start downloading
 }

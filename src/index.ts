@@ -1,4 +1,9 @@
-import { createPolarVisRow } from "./PolarH10VisualizerRow";
+import {
+  createPolarVisRow,
+  PolarVisRow,
+  startRecording,
+  stopRecording,
+} from "./PolarH10VisualizerRow";
 
 const webapp_container = document.createElement("div");
 webapp_container.id = "webapp_container";
@@ -25,6 +30,8 @@ ble_conn_btn.classList.add(
   "btn-action",
   "s-circle",
   "ble-conn",
+  "tooltip",
+  "tooltip-right",
 );
 
 const content = document.createElement("div");
@@ -50,9 +57,58 @@ plus_icon.setAttribute("class", "icon icon-plus");
 ble_conn_btn.appendChild(plus_icon);
 ble_conn_btn.addEventListener(
   "click",
-  polarConnectHandleGen(content, createPolarVisRow),
+  bleConnectHandle,
+  // polarConnectHandleGen(content, createPolarVisRow),
 );
 top_bar_div.appendChild(ble_conn_btn);
+
+let is_recording = false;
+const record_id = "record_btn";
+const record_btn = document.createElement("button");
+record_btn.setAttribute("data-tooltip", "Start recording");
+record_btn.id = record_id;
+record_btn.classList.add(
+  "btn",
+  "btn-primary",
+  "btn-action",
+  "s-circle",
+  "record-conn",
+  "center",
+  "tooltip",
+  "tooltip-left",
+);
+const record_icon = document.createElement("i");
+record_icon.classList.add("material-icons");
+record_icon.textContent = "radio_button_unchecked";
+
+const recording_icon = document.createElement("i");
+recording_icon.classList.add("material-icons", "hide", "red");
+recording_icon.textContent = "radio_button_checked";
+
+record_btn.appendChild(record_icon);
+record_btn.appendChild(recording_icon);
+top_bar_div.appendChild(record_btn);
+
+record_btn.addEventListener("click", onRecordClicked);
+record_btn.disabled = true;
+
+function onRecordClicked(ev: any) {
+  if (is_recording) {
+    is_recording = false;
+    ble_conn_btn.disabled = false;
+    recording_icon.classList.add("hide");
+    record_icon.classList.remove("hide");
+    record_btn.setAttribute("data-tooltip", "Start recording");
+    stopRecording();
+  } else {
+    is_recording = true;
+    ble_conn_btn.disabled = true;
+    record_icon.classList.add("hide");
+    recording_icon.classList.remove("hide");
+    record_btn.setAttribute("data-tooltip", "Stop recording");
+    startRecording();
+  }
+}
 
 function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
   return async (ev: any) => {
@@ -71,6 +127,35 @@ function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
     }
     btDeviceHandler(parentCoponent, device);
   };
+}
+
+async function bleConnectHandle() {
+  // polarConnectHandleGen(content, createPolarVisRow)
+  let device: BluetoothDevice;
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ namePrefix: "Polar" }],
+      optionalServices: [
+        "battery_service",
+        "fb005c80-02e7-f387-1cad-8acd2d8df0c8",
+      ],
+    });
+  } catch (err) {
+    console.log(err);
+    updateRecordEnable();
+    return;
+  }
+  await createPolarVisRow(content, device);
+  updateRecordEnable();
+}
+
+function updateRecordEnable() {
+  if (PolarVisRow.polarVisRows.length > 0) {
+    record_btn.disabled = false;
+  } else {
+    record_btn.disabled = true;
+  }
+  return PolarVisRow.polarVisRows.length;
 }
 
 function location_reload() {
