@@ -491,6 +491,19 @@ export class PolarVisRow {
       await this.initDeviceGraphCtrl();
       PolarVisRow.polarRowID += 1;
       PolarVisRow.polarVisRows.push(this);
+      const duplicateInd = this.includesDuplicate("device");
+      console.log(`duplicateInd: ${duplicateInd}`);
+      if (duplicateInd > -1) {
+        const duplicateRow = PolarVisRow.polarVisRows[duplicateInd];
+        const customBodyPart = duplicateRow.customBodyPart;
+
+        if (customBodyPart) {
+          this.onCustomBodyPart({ target: { value: customBodyPart } });
+        } else {
+          this.bodypartSelect.selectedIndex =
+            duplicateRow.bodypartSelect.selectedIndex;
+        }
+      }
     } catch (err) {
       this.disconnectPolarH10();
       alert(err);
