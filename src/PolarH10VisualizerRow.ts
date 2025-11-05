@@ -1,7 +1,11 @@
 import { SmoothieChart, TimeSeries } from "smoothie";
-import { CustomSmoothie, genSmoothieLegendInfo } from "./CustomSmoothie";
+import {
+  CustomSmoothie,
+  genSmoothieLegendInfo,
+  SmoothieLegendInfo,
+} from "./CustomSmoothie";
 import { CalcCascades, IirFilter } from "fili";
-import { PolarH10, PolarSensorType } from "polar-h10";
+import { PolarH10, PolarSensorType, PolarH10Data } from "polar-h10";
 import {
   SCROLL_MAX_LIMIT_FACTOR,
   DEFAULT_ECG_LINE_CHART_OPTION,
@@ -25,7 +29,6 @@ import {
   ECG_DELTA,
   MAG_PRESENTATION_OPTIONS,
   MAG_LP_PRESENTATION_OPTIONS,
-  PolarH10Data,
   ECG_RMS_WINDOW_MS,
   ECG_RMS_WIN_MIN_MS,
   ECG_RMS_WIN_MAX_MS,
@@ -47,7 +50,6 @@ import {
   AAC_LOWPASS_ORDER,
   AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
   AAC_FILTER_BANDPASS_LOW_CUT_HZ,
-  ACC_FILTER_HIGHLOWPASS_CUTOFF_HZ,
   AAC_FILTER_ORDER,
   ACC_SCROLL_MIN,
   ACC_MAG_SCROLL_MIN,
@@ -101,6 +103,7 @@ export async function createPolarVisRow(
 }
 
 export function startRecording() {
+  PolarVisRow.is_recording = true;
   PolarVisRow.recorded = {};
   const polarNameDict = {};
   for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
@@ -127,6 +130,7 @@ export function startRecording() {
   }
 }
 export function stopRecording() {
+  PolarVisRow.is_recording = false;
   const polarNameDict = {};
   for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
     const row = PolarVisRow.polarVisRows[row_i];
@@ -149,6 +153,7 @@ export class PolarVisRow {
   static polarRowID: number = 0;
   static polarVisRows: PolarVisRow[] = [];
   static recorded = {};
+  static is_recording = false;
   device: BluetoothDevice;
   polarH10: PolarH10;
   deviceName: string;
@@ -310,6 +315,8 @@ export class PolarVisRow {
   ACCLPOrderInput: HTMLInputElement | undefined = undefined;
   ACCLPCutoffInput: HTMLInputElement | undefined = undefined;
 
+  heartbeat_bpm_info: SmoothieLegendInfo | undefined = undefined;
+
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
       throw new Error("Invalid Bluetooth device! Missing name");
@@ -409,45 +416,35 @@ export class PolarVisRow {
 
   recordECGData = (data: PolarH10Data) => {
     if (data.samples !== undefined) {
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
-        data.samples.length;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
       const polarName = this.getPolarName();
       for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const plotDelay = s_i * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
         const sample_i = (data.samples as Int32Array)[s_i];
-        PolarVisRow.recorded[polarName].ECG.timestamp.push(timestamp);
         PolarVisRow.recorded[polarName].ECG.data.push(sample_i);
+        if (data.epoch_timestamps_ms !== undefined) {
+          const timestamp = data.epoch_timestamps_ms[s_i];
+          PolarVisRow.recorded[polarName].ECG.timestamp.push(timestamp);
+        }
       }
     }
   };
 
   recordACCData = (data: PolarH10Data) => {
     if (data.samples !== undefined) {
-      const numFrame = data.samples.length / 3;
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
       const polarName = this.getPolarName();
       for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
         const frameNum = Math.floor(s_i / 3);
-        const plotDelay = frameNum * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
+
         const y_d = -(data.samples as Int16Array)[s_i];
         const x_d = -(data.samples as Int16Array)[s_i + 1];
         const z_d = (data.samples as Int16Array)[s_i + 2];
-        PolarVisRow.recorded[polarName].ACC.timestamp.push(timestamp);
+
         PolarVisRow.recorded[polarName].ACC.data_x.push(x_d);
         PolarVisRow.recorded[polarName].ACC.data_y.push(y_d);
         PolarVisRow.recorded[polarName].ACC.data_z.push(z_d);
+        if (data.epoch_timestamps_ms !== undefined) {
+          const timestamp = data.epoch_timestamps_ms[frameNum];
+          PolarVisRow.recorded[polarName].ACC.timestamp.push(timestamp);
+        }
       }
     }
   };
@@ -504,6 +501,7 @@ export class PolarVisRow {
             duplicateRow.bodypartSelect.selectedIndex;
         }
       }
+      this.polarH10.addBatteryLevelEventListener(this.updateBatteryInfo);
     } catch (err) {
       this.disconnectPolarH10();
       alert(err);
@@ -575,17 +573,13 @@ export class PolarVisRow {
       data.samples !== undefined &&
       this.ecg_filter_iir !== undefined
     ) {
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) /
-        data.samples.length;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
-
+      if (data.epoch_timestamps_ms === undefined) {
+        return;
+      }
       for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const plotDelay = s_i * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
+        const timestamp = data.epoch_timestamps_ms[s_i];
+        const plotDelay =
+          timestamp - data.event_time_offset_ms - data.prev_sample_timestamp_ms;
         const sample_i = (data.samples as Int32Array)[s_i];
         const filtered_sample_i = this.ecg_filter_iir.singleStep(sample_i);
         const filtered_sample_squared_n_i =
@@ -645,18 +639,14 @@ export class PolarVisRow {
       this.acc_z_filter_iir !== undefined &&
       this.acc_mag_filter_iir !== undefined
     ) {
-      const numFrame = data.samples.length / 3;
-      const estimated_sample_interval =
-        (data.sample_timestamp_ms - data.prev_sample_timestamp_ms) / numFrame;
-      const timeOffset =
-        data.event_time_offset_ms +
-        data.prev_sample_timestamp_ms +
-        estimated_sample_interval;
-
+      if (data.epoch_timestamps_ms === undefined) {
+        return;
+      }
       for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
         const frameNum = Math.floor(s_i / 3);
-        const plotDelay = frameNum * estimated_sample_interval;
-        const timestamp = timeOffset + plotDelay;
+        const timestamp = data.epoch_timestamps_ms[frameNum];
+        const plotDelay =
+          timestamp - data.event_time_offset_ms - data.prev_sample_timestamp_ms;
         const y_d = -(data.samples as Int16Array)[s_i];
         const x_d = -(data.samples as Int16Array)[s_i + 1];
         const z_d = (data.samples as Int16Array)[s_i + 2];
@@ -1047,6 +1037,7 @@ export class PolarVisRow {
     this.ACCSwitchInput.disabled = true;
     this.disableAllOtherSameSwitch();
     if (ev.target?.checked) {
+      // Start ECG
       this.initECGFilterSettings();
       let width_class: string;
       if (this.ACCDiv === undefined) {
@@ -1101,6 +1092,7 @@ export class PolarVisRow {
       await this.startECG(ECG_SAMPLE_RATE_HZ);
       this.changeECGGraph({ target: { selectedIndex: 0 } });
     } else {
+      // Stop ECG
       if (
         this.ECGDiv !== undefined &&
         this.ecg_canvas !== undefined &&
@@ -1364,6 +1356,14 @@ export class PolarVisRow {
         const acc_settings = await this.polarH10.getSensorSettingsFromId(
           PolarSensorType.ACC,
         );
+        // this.polarH10.addHeartRateEventListener((info) => {
+        //   console.log(info);
+        // });
+        // await this.polarH10.startHeartRate();
+
+        // this.polarH10.addBatteryLevelEventListener((batt_level) => {
+        //   console.log(batt_level);
+        // });
       } catch (err) {
         console.log(err);
         throw new Error("polarH10 device initialization failed!");
@@ -1423,6 +1423,11 @@ export class PolarVisRow {
         row.bodypartSelect.selectedIndex = selectedInd;
       }
     }
+    if (selectedInd === 4) {
+      this.polarH10.addHeartRateEventListener(console.log);
+    } else if (selectedInd !== 4) {
+      this.polarH10.removeHeartRateEventListener(console.log);
+    }
   };
 
   onCustomBodyPart = (ev: any) => {
@@ -1455,6 +1460,18 @@ export class PolarVisRow {
       }
     }
   };
+
+  private async updateBatteryInfo(batt_lvl: number) {
+    let battStr: string;
+    this.battLvl = batt_lvl;
+    if (this.battLvl > LOW_BATT_LVL) {
+      battStr = `🔋${this.battLvl}%`;
+    } else {
+      battStr = `🪫${this.battLvl}%`;
+    }
+    console.log(`Batt update: ${battStr}`);
+    this.battLvlDiv.textContent = battStr;
+  }
 
   private async initDeviceInfo() {
     this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
@@ -2133,7 +2150,7 @@ export class PolarVisRow {
       "ECGChartConfigTitle",
       ECGTitleRow,
       ["fourty-width", "center", "bold-text"],
-      "EXG Visualization Configs",
+      "EXG Visualization",
     );
 
     const customBodypartInputDiv = createDiv(
@@ -2357,7 +2374,7 @@ export class PolarVisRow {
       "ACCChartConfigTitle",
       ACCTitleRow,
       ["fourty-width", "center", "bold-text"],
-      "Accelerometer Visualization Configs",
+      "Accelerometer Visualization",
     );
 
     const ACCSampleRateRange = createDiv("ACCSampleRateRange", ACCTitleRow, [
@@ -2706,6 +2723,24 @@ export class PolarVisRow {
           if (addCallback) {
             this.polarH10.addEventListener("ECG", this.newECGCallback);
           }
+          if (PolarVisRow.is_recording) {
+            const polarName = this.getPolarName();
+            if (!(polarName in PolarVisRow.recorded)) {
+              PolarVisRow.recorded[polarName] = {
+                ECG: {
+                  data: [],
+                  timestamp: [],
+                },
+                ACC: {
+                  data_x: [],
+                  data_y: [],
+                  data_z: [],
+                  timestamp: [],
+                },
+              };
+            }
+            this.polarH10.addEventListener("ECG", this.recordECGData);
+          }
         } else {
           console.log(startECGReply);
           this.disconnectPolarH10();
@@ -2727,6 +2762,7 @@ export class PolarVisRow {
         if (stopECGReply) {
           console.log(stopECGReply);
         }
+        this.polarH10.removeEventListener("ECG", this.recordECGData);
       } catch (e) {
         console.log(e);
         alert(e);
@@ -2753,6 +2789,25 @@ export class PolarVisRow {
           if (addCallback) {
             this.polarH10.addEventListener("ACC", this.newACCCallback);
           }
+
+          if (PolarVisRow.is_recording) {
+            const polarName = this.getPolarName();
+            if (!(polarName in PolarVisRow.recorded)) {
+              PolarVisRow.recorded[polarName] = {
+                ECG: {
+                  data: [],
+                  timestamp: [],
+                },
+                ACC: {
+                  data_x: [],
+                  data_y: [],
+                  data_z: [],
+                  timestamp: [],
+                },
+              };
+            }
+            this.polarH10.addEventListener("ACC", this.recordACCData);
+          }
         } else {
           console.log(startACCReply);
           this.disconnectPolarH10();
@@ -2774,6 +2829,7 @@ export class PolarVisRow {
         if (stopACCReply) {
           console.log(stopACCReply);
         }
+        this.polarH10.removeEventListener("ACC", this.recordACCData);
       } catch (e) {
         console.log(e);
         alert(e);

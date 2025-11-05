@@ -1,10 +1,15 @@
 import { IChartOptions, ITimeSeriesPresentationOptions } from "smoothie";
 
+// export const HEART_RATE_SERVICE_UUID = "0000180d-0000-1000-8000-00805f9b34fb";
+// export const HEART_RATE_MEASUREMENT_CHARACTERISTIC_UUID =
+//   "00002a37-0000-1000-8000-00805f9b34fb";
+
 export const BODY_PARTS = [
   "",
   "LShoulder",
   "RShoulder",
   "Chest",
+  "Heart",
   "MiddleSpine",
   "LowerSpine",
   "Hip",
@@ -292,14 +297,15 @@ export const PolarSensorNames = Object.keys(PolarSensorType).filter((t) =>
   isNaN(Number(t)),
 );
 
-export interface PolarH10Data {
-  type: (typeof PolarSensorNames)[number];
-  samples?: Int16Array | Int32Array;
-  sample_timestamp_ms: number;
-  prev_sample_timestamp_ms: number;
-  recv_epoch_time_ms: number;
-  event_time_offset_ms: number;
-}
+// export interface PolarH10Data {
+//   epoch_timestamps_ms: any;
+//   type: (typeof PolarSensorNames)[number];
+//   samples?: Int16Array | Int32Array;
+//   sample_timestamp_ms: number;
+//   prev_sample_timestamp_ms: number;
+//   recv_epoch_time_ms: number;
+//   event_time_offset_ms: number;
+// }
 
 export const FILTER_TYPES = ["lowpass", "highpass", "bandpass"];
 export const FILTER_CHARACTERISTICS = ["butterworth", "bessel"];

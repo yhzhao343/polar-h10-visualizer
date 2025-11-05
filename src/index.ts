@@ -5,6 +5,9 @@ import {
   stopRecording,
 } from "./PolarH10VisualizerRow";
 
+// import { HEART_RATE_SERVICE_UUID } from "./consts";
+import { SERVICES } from "polar-h10";
+
 const webapp_container = document.createElement("div");
 webapp_container.id = "webapp_container";
 webapp_container.classList.add("container");
@@ -116,10 +119,7 @@ function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
     try {
       device = await navigator.bluetooth.requestDevice({
         filters: [{ namePrefix: "Polar" }],
-        optionalServices: [
-          "battery_service",
-          "fb005c80-02e7-f387-1cad-8acd2d8df0c8",
-        ],
+        optionalServices: SERVICES,
       });
     } catch (err) {
       console.log(err);
@@ -135,10 +135,7 @@ async function bleConnectHandle() {
   try {
     device = await navigator.bluetooth.requestDevice({
       filters: [{ namePrefix: "Polar" }],
-      optionalServices: [
-        "battery_service",
-        "fb005c80-02e7-f387-1cad-8acd2d8df0c8",
-      ],
+      optionalServices: SERVICES,
     });
   } catch (err) {
     console.log(err);
