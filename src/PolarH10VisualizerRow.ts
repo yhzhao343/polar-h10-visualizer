@@ -337,7 +337,9 @@ export class PolarVisRow {
   rr_ss: number = 0;
   rr_sum: number = 0;
   rr_s_list: number[] = [];
+  rr_list: number[] = [];
   hrv_win_ms: number = 30000;
+  hrv_rms: number = 0;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -723,10 +725,12 @@ export class PolarVisRow {
   addHeartInfo = () => {
     if (
       this.bodypartSelect.selectedIndex === 4 &&
-      this.heartbeat_bpm_info !== undefined
+      this.heartbeat_bpm_info !== undefined &&
+      this.heart_rate_var_rms_info !== undefined
     ) {
       if (this.ecg_chart !== undefined) {
         this.ecg_chart.addSmoothieTSInfo(this.heartbeat_bpm_info);
+        this.ecg_chart.addSmoothieTSInfo(this.heart_rate_var_rms_info);
       }
     }
   };
@@ -734,13 +738,15 @@ export class PolarVisRow {
   removeheartInfo = () => {
     if (
       this.bodypartSelect.selectedIndex !== 4 &&
-      this.heartbeat_bpm_info !== undefined
+      this.heartbeat_bpm_info !== undefined &&
+      this.heart_rate_var_rms_info !== undefined
     ) {
       if (this.ecg_chart !== undefined) {
-        console.log("removeLegendTSInfo");
         this.ecg_chart.removeLegendTSInfo(this.heartbeat_bpm_info);
+        this.ecg_chart.removeLegendTSInfo(this.heart_rate_var_rms_info);
       }
       this.heartbeat_bpm_info = undefined;
+      this.heart_rate_var_rms_info = undefined;
     }
   };
 
@@ -1467,7 +1473,10 @@ export class PolarVisRow {
       if (row.polarH10 === this.polarH10) {
         row.bodypartSelect.selectedIndex = selectedInd;
         if (selectedInd === 4) {
-          if (row.heartbeat_bpm_info === undefined) {
+          if (
+            row.heartbeat_bpm_info === undefined &&
+            row.heart_rate_var_rms_info === undefined
+          ) {
             row.heartbeat_bpm_info = new SmoothieTSInfo(
               undefined,
               undefined,
@@ -1478,7 +1487,19 @@ export class PolarVisRow {
               true,
               "top",
               "bold 20px 'Roboto Mono'",
-              "#fb2f2f",
+              "#fb4f4f",
+            );
+            row.heart_rate_var_rms_info = new SmoothieTSInfo(
+              undefined,
+              undefined,
+              "HRV:     (s)",
+              "left",
+              2,
+              60,
+              true,
+              "top",
+              "bold 20px 'Roboto Mono'",
+              "#4ffbfb",
             );
             row.polarH10.addHeartRateEventListener(row.updateHRLabel);
             row.addHeartInfo();
@@ -1492,20 +1513,37 @@ export class PolarVisRow {
   };
 
   updateHRLabel = (hr_info: HeartRateInfo) => {
-    // console.log(hr_info, this.heartbeat_bpm_info);
     const new_hr_text = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm)`;
     if (this.heartbeat_bpm_info !== undefined) {
       this.heartbeat_bpm_info.text = new_hr_text;
     }
-    // for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-    //   const row = PolarVisRow.polarVisRows[i];
-    //   if (row.polarH10 === this.polarH10) {
-    //     if (row.heartbeat_bpm_info !== undefined) {
-    //       row.heartbeat_bpm_info.text = new_hr_text;
-    //     }
-    //   }
-    // }
-    // this.heartbeat_bpm_info.legend = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm):`;
+    for (let rr of hr_info.rr_intervals_ms) {
+      rr /= 1e3;
+      this.rr_list.push(rr);
+      this.rr_sum += rr;
+
+      const rr_s = rr * rr;
+      this.rr_s_list.push(rr_s);
+      this.rr_ss += rr_s;
+
+      if (this.rr_list.length > 0 && this.rr_s_list.length > 0) {
+        while (this.rr_sum > this.hrv_win_ms) {
+          this.rr_sum -= this.rr_list.shift() as number;
+          this.rr_ss -= this.rr_s_list.shift() as number;
+        }
+      }
+    }
+    const hrv_rms = this.rr_ss / this.rr_s_list.length;
+    const new_hrv_text = `HRV:${hrv_rms.toFixed(2).padStart(5, " ")}(s)`;
+    if (this.heart_rate_var_rms_info !== undefined) {
+      this.heart_rate_var_rms_info.text = new_hrv_text;
+    }
+    // this.rr_s_list.push(...hr_info.rr_intervals_ms);
+
+    // rr_ss: number = 0;
+    // rr_sum: number = 0;
+    // rr_s_list: number[] = [];
+    // hrv_win_ms: number = 30000;
   };
 
   onCustomBodyPart = (ev: any) => {
