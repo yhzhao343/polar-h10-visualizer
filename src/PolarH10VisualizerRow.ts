@@ -2,10 +2,15 @@ import { SmoothieChart, TimeSeries } from "smoothie";
 import {
   CustomSmoothie,
   genSmoothieLegendInfo,
-  SmoothieLegendInfo,
+  SmoothieTSInfo,
 } from "./CustomSmoothie";
 import { CalcCascades, IirFilter } from "fili";
-import { PolarH10, PolarSensorType, PolarH10Data } from "polar-h10";
+import {
+  PolarH10,
+  PolarSensorType,
+  PolarH10Data,
+  HeartRateInfo,
+} from "polar-h10";
 import {
   SCROLL_MAX_LIMIT_FACTOR,
   DEFAULT_ECG_LINE_CHART_OPTION,
@@ -143,10 +148,22 @@ export function stopRecording() {
     }
   }
   download(
-    "Polar-h10-recored_Data",
+    `Polar-h10_recording_${getCurrentTime()}`,
     JSON.stringify(PolarVisRow.recorded, null, 2),
   );
   PolarVisRow.recorded = {};
+}
+
+function getCurrentTime() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
 }
 
 export class PolarVisRow {
@@ -157,7 +174,6 @@ export class PolarVisRow {
   device: BluetoothDevice;
   polarH10: PolarH10;
   deviceName: string;
-  battLvl: number;
   parent: HTMLElement;
   polarSensorDiv: HTMLDivElement;
   optionDiv: HTMLDivElement;
@@ -315,7 +331,13 @@ export class PolarVisRow {
   ACCLPOrderInput: HTMLInputElement | undefined = undefined;
   ACCLPCutoffInput: HTMLInputElement | undefined = undefined;
 
-  heartbeat_bpm_info: SmoothieLegendInfo | undefined = undefined;
+  heartbeat_bpm_info: SmoothieTSInfo | undefined = undefined;
+  heart_rate_var_rms_info: SmoothieTSInfo | undefined = undefined;
+
+  rr_ss: number = 0;
+  rr_sum: number = 0;
+  rr_s_list: number[] = [];
+  hrv_win_ms: number = 30000;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -459,6 +481,7 @@ export class PolarVisRow {
     }
     if (this.ECGDiv !== undefined) {
       this.visContainerDiv?.removeChild(this.ECGDiv);
+      // this.ECGDiv.parentNode?.removeChild(this.ECGDiv);
 
       this.polarH10.removeEventListener("ECG", this.newECGCallback);
       await this.stopECG();
@@ -473,6 +496,7 @@ export class PolarVisRow {
     }
     if (this.ACCDiv !== undefined) {
       this.visContainerDiv?.removeChild(this.ACCDiv);
+      // this.ACCDiv.parentNode?.removeChild(this.ACCDiv);
       this.polarH10.removeEventListener("ACC", this.newACCCallback);
       await this.stopAcc();
     }
@@ -489,16 +513,20 @@ export class PolarVisRow {
       PolarVisRow.polarRowID += 1;
       PolarVisRow.polarVisRows.push(this);
       const duplicateInd = this.includesDuplicate("device");
-      console.log(`duplicateInd: ${duplicateInd}`);
+
       if (duplicateInd > -1) {
+        console.log(`duplicateInd: ${duplicateInd}`);
         const duplicateRow = PolarVisRow.polarVisRows[duplicateInd];
         const customBodyPart = duplicateRow.customBodyPart;
 
         if (customBodyPart) {
           this.onCustomBodyPart({ target: { value: customBodyPart } });
         } else {
-          this.bodypartSelect.selectedIndex =
-            duplicateRow.bodypartSelect.selectedIndex;
+          this.onBodypartSelect({
+            target: {
+              selectedIndex: duplicateRow.bodypartSelect.selectedIndex,
+            },
+          });
         }
       }
       this.polarH10.addBatteryLevelEventListener(this.updateBatteryInfo);
@@ -692,6 +720,30 @@ export class PolarVisRow {
     }
   };
 
+  addHeartInfo = () => {
+    if (
+      this.bodypartSelect.selectedIndex === 4 &&
+      this.heartbeat_bpm_info !== undefined
+    ) {
+      if (this.ecg_chart !== undefined) {
+        this.ecg_chart.addSmoothieTSInfo(this.heartbeat_bpm_info);
+      }
+    }
+  };
+
+  removeheartInfo = () => {
+    if (
+      this.bodypartSelect.selectedIndex !== 4 &&
+      this.heartbeat_bpm_info !== undefined
+    ) {
+      if (this.ecg_chart !== undefined) {
+        console.log("removeLegendTSInfo");
+        this.ecg_chart.removeLegendTSInfo(this.heartbeat_bpm_info);
+      }
+      this.heartbeat_bpm_info = undefined;
+    }
+  };
+
   changeECGGraph = (evt: any) => {
     if (
       this.ecg_chart !== undefined &&
@@ -758,6 +810,7 @@ export class PolarVisRow {
           );
           break;
       }
+      this.addHeartInfo();
       this.ecg_chart.start();
     }
   };
@@ -1356,14 +1409,6 @@ export class PolarVisRow {
         const acc_settings = await this.polarH10.getSensorSettingsFromId(
           PolarSensorType.ACC,
         );
-        // this.polarH10.addHeartRateEventListener((info) => {
-        //   console.log(info);
-        // });
-        // await this.polarH10.startHeartRate();
-
-        // this.polarH10.addBatteryLevelEventListener((batt_level) => {
-        //   console.log(batt_level);
-        // });
       } catch (err) {
         console.log(err);
         throw new Error("polarH10 device initialization failed!");
@@ -1419,15 +1464,48 @@ export class PolarVisRow {
     const selectedInd = ev.target.selectedIndex;
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
-      if (row !== this && row.polarH10 === this.polarH10) {
+      if (row.polarH10 === this.polarH10) {
         row.bodypartSelect.selectedIndex = selectedInd;
+        if (selectedInd === 4) {
+          if (row.heartbeat_bpm_info === undefined) {
+            row.heartbeat_bpm_info = new SmoothieTSInfo(
+              undefined,
+              undefined,
+              "HR:   (bpm)",
+              "left",
+              2,
+              30,
+              true,
+              "top",
+              "bold 20px 'Roboto Mono'",
+              "#fb2f2f",
+            );
+            row.polarH10.addHeartRateEventListener(row.updateHRLabel);
+            row.addHeartInfo();
+          }
+        } else if (selectedInd !== 4) {
+          row.polarH10.removeHeartRateEventListener(row.updateHRLabel);
+          row.removeheartInfo();
+        }
       }
     }
-    if (selectedInd === 4) {
-      this.polarH10.addHeartRateEventListener(console.log);
-    } else if (selectedInd !== 4) {
-      this.polarH10.removeHeartRateEventListener(console.log);
+  };
+
+  updateHRLabel = (hr_info: HeartRateInfo) => {
+    // console.log(hr_info, this.heartbeat_bpm_info);
+    const new_hr_text = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm)`;
+    if (this.heartbeat_bpm_info !== undefined) {
+      this.heartbeat_bpm_info.text = new_hr_text;
     }
+    // for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+    //   const row = PolarVisRow.polarVisRows[i];
+    //   if (row.polarH10 === this.polarH10) {
+    //     if (row.heartbeat_bpm_info !== undefined) {
+    //       row.heartbeat_bpm_info.text = new_hr_text;
+    //     }
+    //   }
+    // }
+    // this.heartbeat_bpm_info.legend = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm):`;
   };
 
   onCustomBodyPart = (ev: any) => {
@@ -1461,17 +1539,26 @@ export class PolarVisRow {
     }
   };
 
-  private async updateBatteryInfo(batt_lvl: number) {
+  private updateBatteryInfo = async (batt_lvl: number) => {
     let battStr: string;
-    this.battLvl = batt_lvl;
-    if (this.battLvl > LOW_BATT_LVL) {
-      battStr = `🔋${this.battLvl}%`;
+    if (batt_lvl > LOW_BATT_LVL) {
+      battStr = `🔋${batt_lvl}%`;
     } else {
-      battStr = `🪫${this.battLvl}%`;
+      battStr = `🪫${batt_lvl}%`;
     }
-    console.log(`Batt update: ${battStr}`);
-    this.battLvlDiv.textContent = battStr;
-  }
+    if (this.battLvlDiv !== undefined) {
+      this.battLvlDiv.textContent = battStr;
+    }
+
+    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      const row = PolarVisRow.polarVisRows[i];
+      if (row.polarH10 === this.polarH10) {
+        if (row.battLvlDiv !== undefined) {
+          row.battLvlDiv.textContent = battStr;
+        }
+      }
+    }
+  };
 
   private async initDeviceInfo() {
     this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
@@ -1494,7 +1581,7 @@ export class PolarVisRow {
 
     addTooltip(this.disBtn, "disconnect", "top");
 
-    this.battLvl = await this.polarH10.getBatteryLevel();
+    this.polarH10.battLvl = await this.polarH10.getBatteryLevel();
     this.optionDiv.removeChild(this.loadingDiv);
     this.optionDiv.removeChild(this.nameDiv);
     this.optionDiv.classList.remove("center");
@@ -1509,10 +1596,10 @@ export class PolarVisRow {
     );
 
     let battStr: string;
-    if (this.battLvl > LOW_BATT_LVL) {
-      battStr = `🔋${this.battLvl}%`;
+    if (this.polarH10.battLvl > LOW_BATT_LVL) {
+      battStr = `🔋${this.polarH10.battLvl}%`;
     } else {
-      battStr = `🪫${this.battLvl}%`;
+      battStr = `🪫${this.polarH10.battLvl}%`;
     }
     this.battLvlDiv = createDiv(
       "battLvl",
