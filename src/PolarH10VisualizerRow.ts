@@ -1533,17 +1533,11 @@ export class PolarVisRow {
         }
       }
     }
-    const hrv_rms = this.rr_ss / this.rr_s_list.length;
+    const hrv_rms = Math.sqrt(this.rr_ss / this.rr_s_list.length);
     const new_hrv_text = `HRV:${hrv_rms.toFixed(2).padStart(5, " ")}(s)`;
     if (this.heart_rate_var_rms_info !== undefined) {
       this.heart_rate_var_rms_info.text = new_hrv_text;
     }
-    // this.rr_s_list.push(...hr_info.rr_intervals_ms);
-
-    // rr_ss: number = 0;
-    // rr_sum: number = 0;
-    // rr_s_list: number[] = [];
-    // hrv_win_ms: number = 30000;
   };
 
   onCustomBodyPart = (ev: any) => {
