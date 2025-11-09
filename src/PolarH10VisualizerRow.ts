@@ -1,16 +1,20 @@
 import { SmoothieChart, TimeSeries } from "smoothie";
+
 import {
   CustomSmoothie,
   genSmoothieLegendInfo,
   SmoothieTSInfo,
 } from "./CustomSmoothie";
+
 import { CalcCascades, IirFilter } from "fili";
+
 import {
   PolarH10,
   PolarSensorType,
   PolarH10Data,
   HeartRateInfo,
 } from "polar-h10";
+
 import {
   SCROLL_MAX_LIMIT_FACTOR,
   DEFAULT_ECG_LINE_CHART_OPTION,
@@ -114,44 +118,29 @@ export function startRecording() {
   for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
     const row = PolarVisRow.polarVisRows[row_i];
     const polarName = row.getPolarName();
+
     if (!(polarName in polarNameDict)) {
-      const polar = row.polarH10;
-      polarNameDict[polarName] = polar;
-      PolarVisRow.recorded[polarName] = {
-        ECG: {
-          data: [],
-          timestamp: [],
-        },
-        ACC: {
-          data_x: [],
-          data_y: [],
-          data_z: [],
-          timestamp: [],
-        },
-      };
-      polar.addEventListener("ECG", row.recordECGData);
-      polar.addEventListener("ACC", row.recordACCData);
+      PolarVisRow.createNewRecordEntry(row);
+      polarNameDict[polarName] = row.polarH10;
+      row.polarH10.addEventListener("ECG", row.recordECGData);
+      row.polarH10.addEventListener("ACC", row.recordACCData);
     }
   }
 }
 export function stopRecording() {
   PolarVisRow.is_recording = false;
-  const polarNameDict = {};
   for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
     const row = PolarVisRow.polarVisRows[row_i];
-    const polarName = row.getPolarName();
-    if (!(polarName in polarNameDict)) {
-      const polar = row.polarH10;
-      polarNameDict[polarName] = polar;
-      polar.removeEventListener("ECG", row.recordECGData);
-      polar.removeEventListener("ACC", row.recordACCData);
-    }
+    const polar = row.polarH10;
+    polar.removeEventListener("ECG", row.recordECGData);
+    polar.removeEventListener("ACC", row.recordACCData);
   }
   download(
     `Polar-h10_recording_${getCurrentTime()}`,
     JSON.stringify(PolarVisRow.recorded, null, 2),
   );
   PolarVisRow.recorded = {};
+  updateRecordBtn();
 }
 
 function getCurrentTime() {
@@ -164,6 +153,38 @@ function getCurrentTime() {
   const seconds = String(date.getSeconds()).padStart(2, "0");
 
   return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
+}
+
+function updateRecordBtn() {
+  if (!PolarVisRow.is_recording) {
+    const record_btn = document.getElementById(
+      "record_btn",
+    ) as HTMLButtonElement;
+    console.log("updateRecordBtn");
+    console.log(record_btn);
+    if (record_btn !== undefined && record_btn !== null) {
+      if (PolarVisRow.hasAnyActiveStream()) {
+        record_btn.disabled = false;
+      } else {
+        record_btn.disabled = true;
+      }
+    }
+  }
+}
+
+function updateDisconnectBtn() {
+  const ble_disconnect_btn = document.getElementById(
+    "ble_disconnect_btn",
+  ) as HTMLButtonElement;
+  console.log("updateDisconnectBtn");
+  console.log(ble_disconnect_btn);
+  if (ble_disconnect_btn !== undefined && ble_disconnect_btn !== null) {
+    if (PolarVisRow.hasAnyActiveStream()) {
+      ble_disconnect_btn.disabled = false;
+    } else {
+      ble_disconnect_btn.disabled = true;
+    }
+  }
 }
 
 export class PolarVisRow {
@@ -339,7 +360,6 @@ export class PolarVisRow {
   rr_s_list: number[] = [];
   rr_list: number[] = [];
   hrv_win_ms: number = 30000;
-  hrv_rms: number = 0;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -354,9 +374,70 @@ export class PolarVisRow {
     this.showVisConfig = false;
   }
 
+  static createNewRecordEntry(row: PolarVisRow) {
+    const polarName = row.getPolarName();
+    if (!(polarName in PolarVisRow.recorded)) {
+      PolarVisRow.recorded[polarName] = {
+        ECG: {
+          data: [],
+          timestamp: [],
+        },
+        ACC: {
+          data_x: [],
+          data_y: [],
+          data_z: [],
+          timestamp: [],
+        },
+      };
+    }
+  }
+
+  static stopAllPolarStream() {
+    const promises: Promise<any>[] = [];
+    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      const row = PolarVisRow.polarVisRows[i];
+      if (row.ECGDiv !== undefined) {
+        promises.push(PolarVisRow.polarVisRows[i].stopECG());
+      }
+      if (row.ACCDiv !== undefined) {
+        promises.push(PolarVisRow.polarVisRows[i].stopAcc());
+      }
+    }
+    return Promise.all(promises);
+  }
+
+  static disconnectAllPolarH10() {
+    const promises: Promise<any>[] = [];
+    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      const row = PolarVisRow.polarVisRows[i];
+      promises.push(row.disconnectPolarH10());
+    }
+    return Promise.all(promises);
+  }
+
+  static hasAnyActiveStream() {
+    let has_active_stream = false;
+    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      const row = PolarVisRow.polarVisRows[i];
+      if (row.ECGDiv !== undefined) {
+        has_active_stream = true;
+        break;
+      }
+      if (row.ACCDiv !== undefined) {
+        has_active_stream = true;
+        break;
+      }
+    }
+    return has_active_stream;
+  }
+
   getPolarName() {
-    const alternative_name =
-      this.customBodyPart || BODY_PARTS[this.bodypartSelect.selectedIndex];
+    let alternative_name: string;
+    if (this.customBodyPart !== undefined && this.customBodyPart.length > 0) {
+      alternative_name = this.customBodyPart;
+    } else {
+      alternative_name = BODY_PARTS[this.bodypartSelect.selectedIndex];
+    }
     if (alternative_name.length > 0) {
       return `${this.deviceName}-${alternative_name}`;
     } else {
@@ -1177,6 +1258,8 @@ export class PolarVisRow {
       this.ACCSwitchInput.disabled = false;
     }
     this.enableAllOtherSameSwitch();
+    updateDisconnectBtn();
+    updateRecordBtn();
   };
 
   onToggleACC = async (ev: any) => {
@@ -1293,6 +1376,8 @@ export class PolarVisRow {
       this.ECGSwitchInput.disabled = false;
     }
     this.enableAllOtherSameSwitch();
+    updateDisconnectBtn();
+    updateRecordBtn();
   };
 
   private removeSelf() {
@@ -1403,6 +1488,9 @@ export class PolarVisRow {
   disconnectPolarH10IfAlone() {
     if (this.includesDuplicate("device") === -1) {
       this.device.gatt?.disconnect();
+      // if (PolarH10Row)
+      updateRecordBtn();
+      updateDisconnectBtn();
     }
   }
 
@@ -1508,6 +1596,9 @@ export class PolarVisRow {
           row.polarH10.removeHeartRateEventListener(row.updateHRLabel);
           row.removeheartInfo();
         }
+      }
+      if (PolarVisRow.is_recording) {
+        PolarVisRow.createNewRecordEntry(row);
       }
     }
   };
@@ -2843,21 +2934,7 @@ export class PolarVisRow {
             this.polarH10.addEventListener("ECG", this.newECGCallback);
           }
           if (PolarVisRow.is_recording) {
-            const polarName = this.getPolarName();
-            if (!(polarName in PolarVisRow.recorded)) {
-              PolarVisRow.recorded[polarName] = {
-                ECG: {
-                  data: [],
-                  timestamp: [],
-                },
-                ACC: {
-                  data_x: [],
-                  data_y: [],
-                  data_z: [],
-                  timestamp: [],
-                },
-              };
-            }
+            PolarVisRow.createNewRecordEntry(this);
             this.polarH10.addEventListener("ECG", this.recordECGData);
           }
         } else {
@@ -2910,21 +2987,7 @@ export class PolarVisRow {
           }
 
           if (PolarVisRow.is_recording) {
-            const polarName = this.getPolarName();
-            if (!(polarName in PolarVisRow.recorded)) {
-              PolarVisRow.recorded[polarName] = {
-                ECG: {
-                  data: [],
-                  timestamp: [],
-                },
-                ACC: {
-                  data_x: [],
-                  data_y: [],
-                  data_z: [],
-                  timestamp: [],
-                },
-              };
-            }
+            PolarVisRow.createNewRecordEntry(this);
             this.polarH10.addEventListener("ACC", this.recordACCData);
           }
         } else {
@@ -3207,18 +3270,23 @@ function addTooltip(e: HTMLElement, tooltip: string, dir: TPDir = "top") {
   e.classList.add("tooltip", `tooltip-${dir}`);
 }
 
-function createButtonIcon(
+export function createButtonIcon(
   type: string,
   id: string | undefined = undefined,
   parent: HTMLElement | undefined = undefined,
   isMaterialIcon: boolean = false,
   onclick: GlobalEventHandlers["onclick"] | undefined = undefined,
   classList: string[] = [],
-  idGenerator: () => number = getPolarRowId,
+  idGenerator: () => number | undefined = getPolarRowId,
 ) {
   const btn = document.createElement("button");
   if (id) {
-    btn.id = `${id}-${idGenerator()}`;
+    const id_suffix = idGenerator();
+    if (id_suffix !== undefined) {
+      btn.id = `${id}-${id_suffix}`;
+    } else {
+      btn.id = id;
+    }
   }
   btn.classList.add("flexbox", "center");
   const icon = document.createElement("i");

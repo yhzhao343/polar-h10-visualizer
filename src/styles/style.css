@@ -293,6 +293,7 @@ div.data-ctrl {
 div.polar-sensor-row {
   height: 12.5%;
   min-height: 115px;
+  margin-left: 5px;
 }
 div.float-left {
   float: left;

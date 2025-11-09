@@ -3,6 +3,7 @@ import {
   PolarVisRow,
   startRecording,
   stopRecording,
+  createButtonIcon,
 } from "./PolarH10VisualizerRow";
 
 // import { HEART_RATE_SERVICE_UUID } from "./consts";
@@ -23,19 +24,47 @@ title.classList.add("title");
 top_bar_div.appendChild(title);
 top_bar_div.classList.add("center");
 
-const ble_conn_id = "ble_connect_btn";
-const ble_conn_btn = document.createElement("button");
-ble_conn_btn.setAttribute("data-tooltip", "Connect new Polar H10");
-ble_conn_btn.id = ble_conn_id;
-ble_conn_btn.classList.add(
-  "btn",
-  "btn-primary",
-  "btn-action",
-  "s-circle",
-  "ble-conn",
-  "tooltip",
-  "tooltip-right",
+const ble_conn_btn = createButtonIcon(
+  "plus",
+  "ble_connect_btn",
+  top_bar_div,
+  false,
+  bleConnectHandle,
+  [
+    "btn",
+    "btn-primary",
+    "btn-action",
+    "s-circle",
+    "ble-conn",
+    "tooltip",
+    "tooltip-right",
+  ],
+  () => undefined,
 );
+ble_conn_btn.setAttribute("data-tooltip", "Connect new Polar H10");
+
+const ble_disconnect_btn = createButtonIcon(
+  "cross",
+  "ble_disconnect_btn",
+  top_bar_div,
+  false,
+  stopStreamExit,
+  [
+    "btn",
+    "btn-error",
+    "btn-action",
+    "s-circle",
+    "ble-conn",
+    "tooltip",
+    "tooltip-right",
+  ],
+  () => undefined,
+);
+ble_disconnect_btn.setAttribute(
+  "data-tooltip",
+  "Stop all streams and disconnect",
+);
+ble_disconnect_btn.disabled = true;
 
 const content = document.createElement("div");
 content.id = "content_div";
@@ -54,16 +83,6 @@ if (navigator.bluetooth === undefined) {
 
   window.stop();
 }
-
-const plus_icon = document.createElement("i");
-plus_icon.setAttribute("class", "icon icon-plus");
-ble_conn_btn.appendChild(plus_icon);
-ble_conn_btn.addEventListener(
-  "click",
-  bleConnectHandle,
-  // polarConnectHandleGen(content, createPolarVisRow),
-);
-top_bar_div.appendChild(ble_conn_btn);
 
 let is_recording = false;
 const record_id = "record_btn";
@@ -113,24 +132,7 @@ function onRecordClicked(ev: any) {
   }
 }
 
-function polarConnectHandleGen(parentCoponent: HTMLElement, btDeviceHandler) {
-  return async (ev: any) => {
-    let device: BluetoothDevice;
-    try {
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ namePrefix: "Polar" }],
-        optionalServices: SERVICES,
-      });
-    } catch (err) {
-      console.log(err);
-      return;
-    }
-    btDeviceHandler(parentCoponent, device);
-  };
-}
-
 async function bleConnectHandle() {
-  // polarConnectHandleGen(content, createPolarVisRow)
   let device: BluetoothDevice;
   try {
     device = await navigator.bluetooth.requestDevice({
@@ -139,21 +141,25 @@ async function bleConnectHandle() {
     });
   } catch (err) {
     console.log(err);
-    updateRecordEnable();
     return;
   }
   await createPolarVisRow(content, device);
-  updateRecordEnable();
 }
 
-function updateRecordEnable() {
-  if (PolarVisRow.polarVisRows.length > 0) {
-    record_btn.disabled = false;
-  } else {
-    record_btn.disabled = true;
-  }
-  return PolarVisRow.polarVisRows.length;
+async function stopStreamExit() {
+  await PolarVisRow.disconnectAllPolarH10();
+  ble_disconnect_btn.disabled = true;
+  record_btn.disabled = true;
 }
+
+window.onbeforeunload = function (event) {
+  if (PolarVisRow.hasAnyActiveStream()) {
+    event.preventDefault();
+    event.returnValue = "";
+  } else {
+    window.close();
+  }
+};
 
 function location_reload() {
   location.reload();
