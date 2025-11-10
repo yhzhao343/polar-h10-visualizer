@@ -24,6 +24,10 @@ title.classList.add("title");
 top_bar_div.appendChild(title);
 top_bar_div.classList.add("center");
 
+function no_suffix() {
+  return undefined;
+}
+
 const ble_conn_btn = createButtonIcon(
   "plus",
   "ble_connect_btn",
@@ -39,7 +43,7 @@ const ble_conn_btn = createButtonIcon(
     "tooltip",
     "tooltip-right",
   ],
-  () => undefined,
+  no_suffix,
 );
 ble_conn_btn.setAttribute("data-tooltip", "Connect new Polar H10");
 
@@ -58,7 +62,7 @@ const ble_disconnect_btn = createButtonIcon(
     "tooltip",
     "tooltip-right",
   ],
-  () => undefined,
+  no_suffix,
 );
 ble_disconnect_btn.setAttribute(
   "data-tooltip",
@@ -85,33 +89,32 @@ if (navigator.bluetooth === undefined) {
 }
 
 let is_recording = false;
-const record_id = "record_btn";
-const record_btn = document.createElement("button");
-record_btn.setAttribute("data-tooltip", "Start recording");
-record_btn.id = record_id;
-record_btn.classList.add(
-  "btn",
-  "btn-primary",
-  "btn-action",
-  "s-circle",
-  "record-conn",
-  "center",
-  "tooltip",
-  "tooltip-left",
+
+const record_btn = createButtonIcon(
+  "radio_button_unchecked",
+  "record_btn",
+  top_bar_div,
+  true,
+  onRecordClicked,
+  [
+    "btn",
+    "btn-primary",
+    "btn-action",
+    "s-circle",
+    "record-conn",
+    "center",
+    "tooltip",
+    "tooltip-left",
+  ],
+  no_suffix,
 );
-const record_icon = document.createElement("i");
-record_icon.classList.add("material-icons");
-record_icon.textContent = "radio_button_unchecked";
 
 const recording_icon = document.createElement("i");
 recording_icon.classList.add("material-icons", "hide", "red");
 recording_icon.textContent = "radio_button_checked";
+const record_icon = record_btn.children[0];
 
-record_btn.appendChild(record_icon);
 record_btn.appendChild(recording_icon);
-top_bar_div.appendChild(record_btn);
-
-record_btn.addEventListener("click", onRecordClicked);
 record_btn.disabled = true;
 
 function onRecordClicked(ev: any) {

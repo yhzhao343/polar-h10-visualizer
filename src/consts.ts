@@ -8,6 +8,10 @@ export const BODY_PARTS = [
   "",
   "LShoulder",
   "RShoulder",
+  "LUpperArm",
+  "RUpperArm",
+  "LLowerArm",
+  "RLowerArm",
   "Chest",
   "Heart",
   "MiddleSpine",
@@ -16,6 +20,8 @@ export const BODY_PARTS = [
   "LThigh",
   "RThigh",
 ];
+
+export const HEART_INDEX = BODY_PARTS.indexOf("Heart");
 const date2000 = new Date("2000-01-01T00:00:00Z");
 const date2018 = new Date("2018-01-01T00:00:00Z");
 export const EPOCH2000_OFFSET_MS = date2000.valueOf();

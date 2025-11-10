@@ -97,7 +97,10 @@ import {
   ACC_SAMPLE_RATE_OPTIONS,
   FILTER_TYPES,
   FILTER_CHARACTERISTICS,
+  HEART_INDEX,
 } from "./consts";
+
+const url_config: object = {};
 
 type ConditionChecker = (row: PolarVisRow) => boolean;
 
@@ -110,6 +113,11 @@ export async function createPolarVisRow(
   const row = new PolarVisRow(content, device);
   await row.init();
 }
+
+// const curr_url_search_string = window.location.search;
+// const url_params: URLSearchParams = new URLSearchParams(
+//   curr_url_search_string,
+// );
 
 export function startRecording() {
   PolarVisRow.is_recording = true;
@@ -160,8 +168,6 @@ function updateRecordBtn() {
     const record_btn = document.getElementById(
       "record_btn",
     ) as HTMLButtonElement;
-    console.log("updateRecordBtn");
-    console.log(record_btn);
     if (record_btn !== undefined && record_btn !== null) {
       if (PolarVisRow.hasAnyActiveStream()) {
         record_btn.disabled = false;
@@ -176,14 +182,26 @@ function updateDisconnectBtn() {
   const ble_disconnect_btn = document.getElementById(
     "ble_disconnect_btn",
   ) as HTMLButtonElement;
-  console.log("updateDisconnectBtn");
-  console.log(ble_disconnect_btn);
   if (ble_disconnect_btn !== undefined && ble_disconnect_btn !== null) {
     if (PolarVisRow.hasAnyActiveStream()) {
       ble_disconnect_btn.disabled = false;
     } else {
       ble_disconnect_btn.disabled = true;
     }
+  }
+}
+
+export function updateSearchURL(config: Object) {
+  const curr_url_search_string = window.location.search;
+  const url_params: URLSearchParams = new URLSearchParams(
+    curr_url_search_string,
+  );
+  for (const [key, val] of Object.entries(config)) {
+    url_params.set(key, val);
+  }
+  if (url_params.toString() !== curr_url_search_string) {
+    const new_url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?${url_params.toString()}`;
+    window.history.pushState({ path: new_url }, "", new_url);
   }
 }
 
@@ -406,13 +424,12 @@ export class PolarVisRow {
     return Promise.all(promises);
   }
 
-  static disconnectAllPolarH10() {
-    const promises: Promise<any>[] = [];
+  static async disconnectAllPolarH10() {
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
+      console.log(`Removing ${i}`);
       const row = PolarVisRow.polarVisRows[i];
-      promises.push(row.disconnectPolarH10());
+      await row.disconnectPolarH10();
     }
-    return Promise.all(promises);
   }
 
   static hasAnyActiveStream() {
@@ -595,25 +612,44 @@ export class PolarVisRow {
       await this.initDeviceGraphCtrl();
       PolarVisRow.polarRowID += 1;
       PolarVisRow.polarVisRows.push(this);
-      const duplicateInd = this.includesDuplicate("device");
 
-      if (duplicateInd > -1) {
-        console.log(`duplicateInd: ${duplicateInd}`);
-        const duplicateRow = PolarVisRow.polarVisRows[duplicateInd];
-        const customBodyPart = duplicateRow.customBodyPart;
-
-        if (customBodyPart) {
-          this.onCustomBodyPart({ target: { value: customBodyPart } });
+      const curr_url_search_string = window.location.search;
+      const url_params: URLSearchParams = new URLSearchParams(
+        curr_url_search_string,
+      );
+      const val: string | null = url_params.get(this.deviceName);
+      if (val !== null) {
+        let id_val = parseInt(val);
+        if (isNaN(id_val)) {
+          this.onCustomBodyPart({ target: { value: val } });
         } else {
           this.onBodypartSelect({
             target: {
-              selectedIndex: duplicateRow.bodypartSelect.selectedIndex,
+              selectedIndex: id_val,
             },
           });
         }
+      } else {
+        const duplicateInd = this.includesDuplicate("device");
+        if (duplicateInd > -1) {
+          console.log(`duplicateInd: ${duplicateInd}`);
+          const duplicateRow = PolarVisRow.polarVisRows[duplicateInd];
+          const customBodyPart = duplicateRow.customBodyPart;
+
+          if (customBodyPart) {
+            this.onCustomBodyPart({ target: { value: customBodyPart } });
+          } else {
+            this.onBodypartSelect({
+              target: {
+                selectedIndex: duplicateRow.bodypartSelect.selectedIndex,
+              },
+            });
+          }
+        }
+        this.polarH10.addBatteryLevelEventListener(this.updateBatteryInfo);
       }
-      this.polarH10.addBatteryLevelEventListener(this.updateBatteryInfo);
     } catch (err) {
+      console.log(err);
       this.disconnectPolarH10();
       alert(err);
     }
@@ -805,7 +841,7 @@ export class PolarVisRow {
 
   addHeartInfo = () => {
     if (
-      this.bodypartSelect.selectedIndex === 4 &&
+      this.bodypartSelect.selectedIndex === HEART_INDEX &&
       this.heartbeat_bpm_info !== undefined &&
       this.heart_rate_var_rms_info !== undefined
     ) {
@@ -818,7 +854,7 @@ export class PolarVisRow {
 
   removeheartInfo = () => {
     if (
-      this.bodypartSelect.selectedIndex !== 4 &&
+      this.bodypartSelect.selectedIndex !== HEART_INDEX &&
       this.heartbeat_bpm_info !== undefined &&
       this.heart_rate_var_rms_info !== undefined
     ) {
@@ -1556,11 +1592,32 @@ export class PolarVisRow {
 
   onBodypartSelect = (ev: any) => {
     const selectedInd = ev.target.selectedIndex;
+    let url_need_update = false;
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
       if (row.polarH10 === this.polarH10) {
         row.bodypartSelect.selectedIndex = selectedInd;
-        if (selectedInd === 4) {
+        row.customBodyPartSpan?.classList.add("hide");
+        row.bodypartSelect?.classList.remove("hide");
+        if (row.customBodyPart !== BODY_PARTS[selectedInd]) {
+          row.customBodyPartInput.value = "";
+        }
+
+        if (row.bodypartSelect.selectedIndex > 0) {
+          if (row.deviceName in url_config) {
+            if (
+              url_config[row.deviceName] !== row.bodypartSelect.selectedIndex
+            ) {
+              url_config[row.deviceName] = row.bodypartSelect.selectedIndex;
+              url_need_update = true;
+            }
+          } else {
+            url_config[row.deviceName] = row.bodypartSelect.selectedIndex;
+            url_need_update = true;
+          }
+        }
+
+        if (selectedInd === HEART_INDEX) {
           if (
             row.heartbeat_bpm_info === undefined &&
             row.heart_rate_var_rms_info === undefined
@@ -1592,7 +1649,7 @@ export class PolarVisRow {
             row.polarH10.addHeartRateEventListener(row.updateHRLabel);
             row.addHeartInfo();
           }
-        } else if (selectedInd !== 4) {
+        } else if (selectedInd !== HEART_INDEX) {
           row.polarH10.removeHeartRateEventListener(row.updateHRLabel);
           row.removeheartInfo();
         }
@@ -1600,6 +1657,9 @@ export class PolarVisRow {
       if (PolarVisRow.is_recording) {
         PolarVisRow.createNewRecordEntry(row);
       }
+    }
+    if (url_need_update) {
+      updateSearchURL(url_config);
     }
   };
 
@@ -1633,32 +1693,56 @@ export class PolarVisRow {
 
   onCustomBodyPart = (ev: any) => {
     const customBodyPartStr = ev.target.value;
-    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-      const row = PolarVisRow.polarVisRows[i];
-      row.customBodyPart = customBodyPartStr;
-      if (row.polarH10 === this.polarH10) {
-        if (row.customBodyPartSpan !== undefined) {
-          row.customBodyPartSpan.textContent = customBodyPartStr;
-          row.customBodyPartInput.value = customBodyPartStr;
-        }
-      }
-    }
+    let url_need_update = false;
     if (customBodyPartStr.length === 0) {
       for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
         const row = PolarVisRow.polarVisRows[i];
         if (row.polarH10 === this.polarH10) {
           row.customBodyPartSpan?.classList.add("hide");
           row.bodypartSelect?.classList.remove("hide");
+          row.onBodypartSelect({
+            target: {
+              selectedIndex: 0,
+            },
+          });
         }
       }
     } else {
+      const body_part_ind = BODY_PARTS.indexOf(customBodyPartStr);
       for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
         const row = PolarVisRow.polarVisRows[i];
         if (row.polarH10 === this.polarH10) {
-          row.customBodyPartSpan?.classList.remove("hide");
-          row.bodypartSelect?.classList.add("hide");
+          if (body_part_ind > -1) {
+            row.customBodyPartSpan?.classList.add("hide");
+            row.bodypartSelect?.classList.remove("hide");
+            row.customBodyPart = customBodyPartStr;
+            row.onBodypartSelect({
+              target: {
+                selectedIndex: body_part_ind,
+              },
+            });
+          } else {
+            row.customBodyPartSpan?.classList.remove("hide");
+            row.bodypartSelect?.classList.add("hide");
+            if (row.customBodyPartSpan !== undefined) {
+              row.customBodyPartSpan.textContent = customBodyPartStr;
+              row.customBodyPartInput.value = customBodyPartStr;
+              if (row.deviceName in url_config) {
+                if (url_config[row.deviceName] !== customBodyPartStr) {
+                  url_config[row.deviceName] = customBodyPartStr;
+                  url_need_update = true;
+                }
+              } else {
+                url_config[row.deviceName] = customBodyPartStr;
+                url_need_update = true;
+              }
+            }
+          }
         }
       }
+    }
+    if (url_need_update) {
+      updateSearchURL(url_config);
     }
   };
 
