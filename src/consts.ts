@@ -119,6 +119,9 @@ export const ACC_MS_PER_PX_MIN = 1;
 export const ACC_MS_PER_PX_MAX = 30;
 export const ACC_MS_PER_PX_STEP = 0.1;
 
+export const ECG_HRV_RMSSD_WIN_MS = 30000;
+export const ECG_HRV_RMSSD_WIN_MAX_MS = 600000;
+
 export const DEFAULT_ECG_LINE_CHART_OPTION: IChartOptions = {
   limitFPS: 60,
   grid: {

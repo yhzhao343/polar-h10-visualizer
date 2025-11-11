@@ -98,6 +98,8 @@ import {
   FILTER_TYPES,
   FILTER_CHARACTERISTICS,
   HEART_INDEX,
+  ECG_HRV_RMSSD_WIN_MS,
+  ECG_HRV_RMSSD_WIN_MAX_MS,
 } from "./consts";
 
 const url_config: object = {};
@@ -235,7 +237,7 @@ export class PolarVisRow {
   ECGConfigDiv: HTMLDivElement;
   ECGChartConfigDiv: HTMLDivElement;
   ECGFilterConfigDiv: HTMLDivElement;
-  ECGRMSConfigDiv: HTMLDivElement;
+  ECGHeartConfigDiv: HTMLDivElement;
 
   customBodyPartInput: HTMLInputElement;
 
@@ -257,6 +259,8 @@ export class PolarVisRow {
   ACC_MAX: number = ACC_MAX;
   ACC_FILTER_MIN: number = ACC_FILTER_MIN;
   ACC_FILTER_MAX: number = ACC_FILTER_MAX;
+
+  ECGHRVRMSSDWinMs: number = ECG_HRV_RMSSD_WIN_MS;
 
   disBtn: HTMLButtonElement;
   orderUpBtn: HTMLButtonElement;
@@ -358,6 +362,7 @@ export class PolarVisRow {
   ECGFilterCutoffInput: HTMLInputElement | undefined = undefined;
   ECGFilterHighCutInput: HTMLInputElement | undefined = undefined;
   ECGFilterLowCutInput: HTMLInputElement | undefined = undefined;
+  ECGRMSSDWinMsInput: HTMLInputElement | undefined = undefined;
 
   ACCFilterTypesSelect: HTMLSelectElement | undefined = undefined;
   ACCFilterCharSelect: HTMLSelectElement | undefined = undefined;
@@ -377,7 +382,6 @@ export class PolarVisRow {
   rr_sum: number = 0;
   rr_s_list: number[] = [];
   rr_list: number[] = [];
-  hrv_win_ms: number = 30000;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -386,7 +390,6 @@ export class PolarVisRow {
     this.parent = content;
     this.device = device;
     this.deviceName = this.device?.name?.substring(10) || "";
-    this.ecg_rms_window_ms = ECG_RMS_WINDOW_MS;
     this.updateECGRMSWinSize();
     this.initFilterSettings();
     this.showVisConfig = false;
@@ -410,25 +413,21 @@ export class PolarVisRow {
     }
   }
 
-  static stopAllPolarStream() {
-    const promises: Promise<any>[] = [];
+  static async stopAllPolarStream() {
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
       if (row.ECGDiv !== undefined) {
-        promises.push(PolarVisRow.polarVisRows[i].stopECG());
+        await PolarVisRow.polarVisRows[i].stopECG();
       }
       if (row.ACCDiv !== undefined) {
-        promises.push(PolarVisRow.polarVisRows[i].stopAcc());
+        await PolarVisRow.polarVisRows[i].stopAcc();
       }
     }
-    return Promise.all(promises);
   }
 
   static async disconnectAllPolarH10() {
-    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-      console.log(`Removing ${i}`);
-      const row = PolarVisRow.polarVisRows[i];
-      await row.disconnectPolarH10();
+    for (let i = PolarVisRow.polarVisRows.length - 1; i > -1; i--) {
+      await PolarVisRow.polarVisRows[i].disconnectPolarH10();
     }
   }
 
@@ -1678,7 +1677,7 @@ export class PolarVisRow {
       this.rr_ss += rr_s;
 
       if (this.rr_list.length > 0 && this.rr_s_list.length > 0) {
-        while (this.rr_sum > this.hrv_win_ms) {
+        while (this.rr_sum > this.ECGHRVRMSSDWinMs) {
           this.rr_sum -= this.rr_list.shift() as number;
           this.rr_ss -= this.rr_s_list.shift() as number;
         }
@@ -1727,6 +1726,11 @@ export class PolarVisRow {
             if (row.customBodyPartSpan !== undefined) {
               row.customBodyPartSpan.textContent = customBodyPartStr;
               row.customBodyPartInput.value = customBodyPartStr;
+              const prevSelectedInd = row.bodypartSelect.selectedIndex;
+              row.bodypartSelect.selectedIndex = 0;
+              if (prevSelectedInd === HEART_INDEX) {
+                row.removeheartInfo();
+              }
               if (row.deviceName in url_config) {
                 if (url_config[row.deviceName] !== customBodyPartStr) {
                   url_config[row.deviceName] = customBodyPartStr;
@@ -2425,6 +2429,10 @@ export class PolarVisRow {
     }
   }
 
+  onRMSSDWinMsChange(event: any) {
+    this.ECGHRVRMSSDWinMs = parseInt(event.target.value) * 1e3;
+  }
+
   private initVisConfigDiv() {
     this.ECGConfigDiv = createDiv("ECGConfigDiv", this.visConfigDiv, [
       "float-left",
@@ -2646,9 +2654,33 @@ export class PolarVisRow {
       this.ECGFilterHighCutInput.classList.remove("hide");
     }
 
-    this.ECGRMSConfigDiv = createDiv("ECGRMSConfigDiv", this.ECGConfigDiv, [
+    this.ECGHeartConfigDiv = createDiv("ECGHeartConfigDiv", this.ECGConfigDiv, [
       "full-width",
+      "flexbox",
     ]);
+
+    createSpan(
+      "ECGRMSSDWinMsSpan",
+      this.ECGHeartConfigDiv,
+      ["padleft-5px", "padright-5px"],
+      "RMSSD window size for Heart (s): ",
+    );
+
+    this.ECGRMSSDWinMsInput = createNumInput(
+      "ECGRMSSDWinMsInput",
+      this.ECGHeartConfigDiv,
+      ["dark-input", "freq-input-width"],
+      this.ECGHRVRMSSDWinMs / 1e3,
+      ECG_HRV_RMSSD_WIN_MAX_MS / 1e3,
+      1,
+      Math.floor(this.ECGHRVRMSSDWinMs / 1000),
+    );
+    this.ECGRMSSDWinMsInput.addEventListener("change", this.onRMSSDWinMsChange);
+
+    this.ECGFilterCutoffInput.addEventListener(
+      "change",
+      this.onECGFilterCutoff,
+    );
 
     this.ACCConfigDiv = createDiv("ACCConfigDiv", this.visConfigDiv, [
       "float-left",

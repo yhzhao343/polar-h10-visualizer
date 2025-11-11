@@ -113,6 +113,7 @@ const recording_icon = document.createElement("i");
 recording_icon.classList.add("material-icons", "hide", "red");
 recording_icon.textContent = "radio_button_checked";
 const record_icon = record_btn.children[0];
+record_btn.setAttribute("data-tooltip", "Start recording");
 
 record_btn.appendChild(recording_icon);
 record_btn.disabled = true;
