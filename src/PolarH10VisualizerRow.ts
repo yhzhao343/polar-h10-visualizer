@@ -131,7 +131,7 @@ export function startRecording() {
 
     if (!(polarName in polarNameDict)) {
       PolarVisRow.createNewRecordEntry(row);
-      polarNameDict[polarName] = row.polarH10;
+      polarNameDict[polarName] = "";
       row.polarH10.addEventListener("ECG", row.recordECGData);
       row.polarH10.addEventListener("ACC", row.recordACCData);
     }
@@ -139,11 +139,15 @@ export function startRecording() {
 }
 export function stopRecording() {
   PolarVisRow.is_recording = false;
+  const polarNameDict = {};
   for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
     const row = PolarVisRow.polarVisRows[row_i];
-    const polar = row.polarH10;
-    polar.removeEventListener("ECG", row.recordECGData);
-    polar.removeEventListener("ACC", row.recordACCData);
+    const polarName = row.getPolarName();
+    if (!(polarName in polarNameDict)) {
+      polarNameDict[polarName] = "";
+      row.polarH10.removeEventListener("ECG", row.recordECGData);
+      row.polarH10.removeEventListener("ACC", row.recordACCData);
+    }
   }
   download(
     `Polar-h10_recording_${getCurrentTime()}`,
@@ -629,7 +633,7 @@ export class PolarVisRow {
           });
         }
       } else {
-        const duplicateInd = this.includesDuplicate("device");
+        const duplicateInd = PolarVisRow.includesDuplicate(this, "device");
         if (duplicateInd > -1) {
           console.log(`duplicateInd: ${duplicateInd}`);
           const duplicateRow = PolarVisRow.polarVisRows[duplicateInd];
@@ -1467,32 +1471,6 @@ export class PolarVisRow {
     await this.initPolarH10IfUnique();
   }
 
-  includesDuplicate(
-    key: string = "device",
-    conditionCallback: ConditionChecker | undefined = undefined,
-  ): number {
-    let duplicateInd = -1;
-    if (conditionCallback !== undefined) {
-      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-        let row = PolarVisRow.polarVisRows[i];
-        if (row !== this && row[key] === this[key] && conditionCallback(row)) {
-          duplicateInd = i;
-          break;
-        }
-      }
-    } else {
-      for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-        let row = PolarVisRow.polarVisRows[i];
-        if (row !== this && row[key] === this[key]) {
-          duplicateInd = i;
-          break;
-        }
-      }
-    }
-
-    return duplicateInd;
-  }
-
   static includesDuplicate(
     self: PolarVisRow,
     key: string = "device",
@@ -1521,7 +1499,7 @@ export class PolarVisRow {
   }
 
   disconnectPolarH10IfAlone() {
-    if (this.includesDuplicate("device") === -1) {
+    if (PolarVisRow.includesDuplicate(this, "device") === -1) {
       this.device.gatt?.disconnect();
       // if (PolarH10Row)
       updateRecordBtn();
@@ -1530,7 +1508,7 @@ export class PolarVisRow {
   }
 
   async initPolarH10IfUnique() {
-    const duplicateInd = this.includesDuplicate("device");
+    const duplicateInd = PolarVisRow.includesDuplicate(this, "device");
     if (duplicateInd < 0) {
       try {
         this.polarH10 = new PolarH10(this.device);
@@ -3038,7 +3016,7 @@ export class PolarVisRow {
     sampleRate: number = ECG_SAMPLE_RATE_HZ,
     addCallback: boolean = true,
   ) {
-    const duplicateInd = this.includesDuplicate("device", ECGIsOn);
+    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
     if (duplicateInd < 0) {
       try {
         const startECGReply = await this.polarH10.startECG(sampleRate);
@@ -3067,7 +3045,7 @@ export class PolarVisRow {
   }
 
   async stopECG() {
-    const duplicateInd = this.includesDuplicate("device", ECGIsOn);
+    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
     if (duplicateInd < 0) {
       try {
         const stopECGReply = await this.polarH10.stopECG();
@@ -3090,7 +3068,7 @@ export class PolarVisRow {
     sampleRate: number = ACC_SAMPLE_RATE_HZ,
     addCallback: boolean = true,
   ) {
-    const duplicateInd = this.includesDuplicate("device", ACCIsOn);
+    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
     if (duplicateInd < 0) {
       try {
         const startACCReply = await this.polarH10.startACC(range, sampleRate);
@@ -3120,7 +3098,7 @@ export class PolarVisRow {
   }
 
   async stopAcc() {
-    const duplicateInd = this.includesDuplicate("device", ACCIsOn);
+    const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
     if (duplicateInd < 0) {
       try {
         const stopACCReply = await this.polarH10.stopACC();
