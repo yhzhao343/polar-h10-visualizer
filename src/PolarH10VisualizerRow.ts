@@ -382,10 +382,13 @@ export class PolarVisRow {
   heartbeat_bpm_info: SmoothieTSInfo | undefined = undefined;
   heart_rate_var_rms_info: SmoothieTSInfo | undefined = undefined;
 
-  rr_ss: number = 0;
+  // rr_ss: number = 0;
   rr_sum: number = 0;
-  rr_s_list: number[] = [];
+  // rr_s_list: number[] = [];
   rr_list: number[] = [];
+  rr_ssd_list: number[] = [];
+  rr_sssd: number = 0;
+  rr_rmssd: number = 0;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -1602,7 +1605,7 @@ export class PolarVisRow {
             row.heartbeat_bpm_info = new SmoothieTSInfo(
               undefined,
               undefined,
-              "HR:   (bpm)",
+              "HR:",
               "left",
               2,
               30,
@@ -1614,7 +1617,7 @@ export class PolarVisRow {
             row.heart_rate_var_rms_info = new SmoothieTSInfo(
               undefined,
               undefined,
-              "HRV:     (s)",
+              "HRV:",
               "left",
               2,
               60,
@@ -1642,27 +1645,29 @@ export class PolarVisRow {
 
   updateHRLabel = (hr_info: HeartRateInfo) => {
     const new_hr_text = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm)`;
+    let valid_and_updated = false;
     if (this.heartbeat_bpm_info !== undefined) {
       this.heartbeat_bpm_info.text = new_hr_text;
     }
     for (let rr of hr_info.rr_intervals_ms) {
-      rr /= 1e3;
       this.rr_list.push(rr);
-      this.rr_sum += rr;
-
-      const rr_s = rr * rr;
-      this.rr_s_list.push(rr_s);
-      this.rr_ss += rr_s;
-
-      if (this.rr_list.length > 0 && this.rr_s_list.length > 0) {
-        while (this.rr_sum > this.ECGHRVRMSSDWinMs) {
-          this.rr_sum -= this.rr_list.shift() as number;
-          this.rr_ss -= this.rr_s_list.shift() as number;
+      if (this.rr_list.length > 1) {
+        const sd = rr - this.rr_list[this.rr_list.length - 2];
+        const ssd = sd * sd;
+        this.rr_ssd_list.push(ssd);
+        this.rr_sssd += ssd;
+        this.rr_sum += rr;
+        if (this.rr_ssd_list.length > 0) {
+          while (this.rr_sum > this.ECGHRVRMSSDWinMs) {
+            valid_and_updated = true
+            this.rr_sum -= this.rr_list.shift() as number;
+            this.rr_sssd -= this.rr_ssd_list.shift() as number;
+          }
         }
       }
     }
-    const hrv_rms = Math.sqrt(this.rr_ss / this.rr_s_list.length);
-    const new_hrv_text = `HRV:${hrv_rms.toFixed(2).padStart(5, " ")}(s)`;
+    this.rr_rmssd = Math.sqrt(this.rr_sssd / this.rr_ssd_list.length);
+    const new_hrv_text = `HRV${valid_and_updated?"":"*"}:${this.rr_rmssd.toFixed(2).padStart(5, " ")}(ms)`;
     if (this.heart_rate_var_rms_info !== undefined) {
       this.heart_rate_var_rms_info.text = new_hrv_text;
     }
