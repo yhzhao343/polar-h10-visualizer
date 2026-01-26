@@ -28,6 +28,7 @@ export class SmoothieTSInfo {
   off_fillStyle: string = DEFAULT_DISABLE_COLOR;
   width: number | undefined = undefined;
   height: number | undefined = undefined;
+  show: boolean = true;
 
   constructor(
     timeseries: TimeSeries | undefined,
@@ -327,6 +328,7 @@ export class CustomSmoothie extends SmoothieChart {
           }
         }
         const info = infos[i];
+        if (!info.show) continue;
         ctx.textBaseline = info.textBaseline;
         ctx.textAlign = info.textAlign;
         ctx.font = info.font;

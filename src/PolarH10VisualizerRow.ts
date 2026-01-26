@@ -331,6 +331,10 @@ export class PolarVisRow {
   acc_phi_ts: TimeSeries | undefined = undefined;
   acc_theta_ts: TimeSeries | undefined = undefined;
 
+  hr_ts: TimeSeries | undefined = undefined;
+  rmssd_ts: TimeSeries | undefined = undefined;
+  private readonly HEART_PLOT_MS_PER_PX = 50;
+
   acc_filter_info: FilterInfo;
   acc_filter_iir_coef = undefined;
   acc_x_filter_iir: IirFilter | undefined = undefined;
@@ -882,6 +886,8 @@ export class PolarVisRow {
     ) {
       const selected = evt.target.selectedIndex;
       this.ecg_chart.stop();
+      this.ecg_chart.options.grid!.strokeStyle =
+        DEFAULT_ECG_LINE_CHART_OPTION?.grid?.strokeStyle || "#484f58";
       switch (selected) {
         case 0: // "Raw":
           this.ecg_chart.configureTimeSeries(
@@ -901,6 +907,8 @@ export class PolarVisRow {
             false,
             true,
           );
+          this.ecg_chart.options.millisPerPixel = this.ecg_millis_per_px;
+          this.setHeartLabelsVisibility("BOTH");
           break;
         case 1: // filter:
           this.ecg_chart.configureTimeSeries(
@@ -919,6 +927,8 @@ export class PolarVisRow {
             true,
             true,
           );
+          this.ecg_chart.options.millisPerPixel = this.ecg_millis_per_px;
+          this.setHeartLabelsVisibility("BOTH");
           break;
         case 2: //"RMS":
           this.ecg_chart.configureTimeSeries(
@@ -937,6 +947,50 @@ export class PolarVisRow {
             true,
             true,
           );
+          this.ecg_chart.options.millisPerPixel = this.ecg_millis_per_px;
+          this.setHeartLabelsVisibility("BOTH");
+          break;
+        case 3: // "Heart Rate (BPM)"
+          this.ecg_chart.configureTimeSeries(
+            [this.hr_ts!],
+            [{ strokeStyle: "#fb4f4f", lineWidth: 3 }],
+            [genSmoothieLegendInfo("― Heart Rate (BPM)", 10, 0)],
+            true,
+            50,
+            190,
+            1,
+            1,
+            "Realtime Heart Rate",
+            false,
+            [],
+            true,
+            true,
+            true,
+          );
+          this.ecg_chart.options.millisPerPixel = this.HEART_PLOT_MS_PER_PX;
+          this.ecg_chart.options.grid!.strokeStyle = "#484f5833";
+          this.setHeartLabelsVisibility("HR");
+          break;
+        case 4: // "HRV (RMSSD)"
+          this.ecg_chart.configureTimeSeries(
+            [this.rmssd_ts!],
+            [{ strokeStyle: "#4ffbfb", lineWidth: 3 }],
+            [genSmoothieLegendInfo("― RMSSD (ms)", 10, 0)],
+            true,
+            15,
+            100,
+            1,
+            1,
+            "Realtime HRV (RMSSD)",
+            false,
+            [],
+            true,
+            true,
+            true,
+          );
+          this.ecg_chart.options.millisPerPixel = this.HEART_PLOT_MS_PER_PX;
+          this.ecg_chart.options.grid!.strokeStyle = "#484f5833";
+          this.setHeartLabelsVisibility("HRV");
           break;
       }
       this.addHeartInfo();
@@ -1205,6 +1259,34 @@ export class PolarVisRow {
     }
   }
 
+  private setHeartLabelsVisibility(mode: "HR" | "HRV" | "BOTH") {
+    if (
+      !this.heartbeat_bpm_info ||
+      !this.heart_rate_var_rms_info ||
+      !this.ecg_canvas
+    )
+      return;
+
+    const canvasHeight = this.ecg_canvas.height / window.devicePixelRatio;
+    const centerY = canvasHeight / 2 - 10; // Adjusting for font height
+
+    if (mode === "HR") {
+      this.heartbeat_bpm_info.show = true;
+      this.heartbeat_bpm_info.y = centerY;
+      this.heart_rate_var_rms_info.show = false; // Hide HRV
+    } else if (mode === "HRV") {
+      this.heartbeat_bpm_info.show = false; // Hide HR
+      this.heart_rate_var_rms_info.show = true;
+      this.heart_rate_var_rms_info.y = centerY;
+    } else {
+      // Default positions for raw/rms views
+      this.heartbeat_bpm_info.show = true;
+      this.heartbeat_bpm_info.y = 30;
+      this.heart_rate_var_rms_info.show = true;
+      this.heart_rate_var_rms_info.y = 60;
+    }
+  }
+
   enableAllOtherSameSwitch() {
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
@@ -1246,6 +1328,8 @@ export class PolarVisRow {
       this.ecg_ts = new TimeSeries();
       this.ecg_rms_ts = new TimeSeries();
       this.ecg_filter_ts = new TimeSeries();
+      this.hr_ts = new TimeSeries();
+      this.rmssd_ts = new TimeSeries();
       // this.ecg_chart.addTimeSeries(this.ecg_ts, ECG_PRESENTATION_OPTIONS);
       this.ecg_chart.streamTo(this.ecg_canvas, this.ecg_stream_delay);
 
@@ -1583,7 +1667,7 @@ export class PolarVisRow {
           row.customBodyPartInput.value = "";
         }
 
-        if (row.bodypartSelect.selectedIndex > 0) {
+        if ((row.bodypartSelect.selectedIndex > 0) && (!url_need_update)) {
           if (row.deviceName in url_config) {
             if (
               url_config[row.deviceName] !== row.bodypartSelect.selectedIndex
@@ -1629,9 +1713,18 @@ export class PolarVisRow {
             row.polarH10.addHeartRateEventListener(row.updateHRLabel);
             row.addHeartInfo();
           }
-        } else if (selectedInd !== HEART_INDEX) {
+          row.generateECGFormSelect(
+            row.ECGFormSelect.selectedIndex,
+            row.ECGFormSelect.disabled,
+          );
+        } else {
+          if (row.ECGFormSelect.selectedIndex > 2) {
+            row.ECGFormSelect.selectedIndex = 0;
+            row.changeECGGraph({ target: { selectedIndex: 0 } });
+          }
           row.polarH10.removeHeartRateEventListener(row.updateHRLabel);
           row.removeheartInfo();
+          row.generateECGFormSelect(0, row.ECGFormSelect.disabled);
         }
       }
       if (PolarVisRow.is_recording) {
@@ -1645,6 +1738,7 @@ export class PolarVisRow {
 
   updateHRLabel = (hr_info: HeartRateInfo) => {
     const new_hr_text = `HR:${hr_info.heart_rate_bpm.toString().padStart(3, " ")}(bpm)`;
+    this.hr_ts?.append(hr_info.recv_epoch_time_ms, hr_info.heart_rate_bpm);
     let valid_and_updated = false;
     if (this.heartbeat_bpm_info !== undefined) {
       this.heartbeat_bpm_info.text = new_hr_text;
@@ -1659,7 +1753,7 @@ export class PolarVisRow {
         this.rr_sum += rr;
         if (this.rr_ssd_list.length > 0) {
           while (this.rr_sum > this.ECGHRVRMSSDWinMs) {
-            valid_and_updated = true
+            valid_and_updated = true;
             this.rr_sum -= this.rr_list.shift() as number;
             this.rr_sssd -= this.rr_ssd_list.shift() as number;
           }
@@ -1667,9 +1761,12 @@ export class PolarVisRow {
       }
     }
     this.rr_rmssd = Math.sqrt(this.rr_sssd / this.rr_ssd_list.length);
-    const new_hrv_text = `HRV${valid_and_updated?"":"*"}:${this.rr_rmssd.toFixed(2).padStart(5, " ")}(ms)`;
-    if (this.heart_rate_var_rms_info !== undefined) {
-      this.heart_rate_var_rms_info.text = new_hrv_text;
+    if (this.rr_rmssd > 0 && !Number.isNaN(this.rr_rmssd)) {
+      const new_hrv_text = `HRV${valid_and_updated ? "" : "*"}:${this.rr_rmssd.toFixed(2).padStart(5, " ")}(ms)`;
+      if (this.heart_rate_var_rms_info !== undefined) {
+        this.heart_rate_var_rms_info.text = new_hrv_text;
+      }
+      this.rmssd_ts?.append(hr_info.recv_epoch_time_ms, this.rr_rmssd);
     }
   };
 
@@ -2976,16 +3073,23 @@ export class PolarVisRow {
       const parent = this.ECGFormSelect.parentElement;
       parent?.removeChild(this.ECGFormSelect);
     }
+
+    const options = [
+      "Raw",
+      compactPrettyPrintFilter(this.ecg_filter_info),
+      `${this.ecg_rms_window_ms}ms RMS`,
+    ];
+
+    if (this.bodypartSelect.selectedIndex === HEART_INDEX) {
+      options.push("Heart Rate (BPM)", "HRV (RMSSD)");
+    }
+
     this.ECGFormSelect = createSelect(
       "ECGFormSelect",
       this.ECGDropDown,
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
-      [
-        "Raw",
-        compactPrettyPrintFilter(this.ecg_filter_info),
-        `${this.ecg_rms_window_ms}ms RMS`,
-      ],
+      options,
       selectedInd,
     );
     this.ECGFormSelect.onchange = this.changeECGGraph;
