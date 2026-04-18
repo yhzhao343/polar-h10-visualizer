@@ -10,7 +10,7 @@ const DEFAULT_ENABLE_COLOR = "#ebebebcc";
 const DEFAULT_DISABLE_COLOR = "#5f5f5fcc";
 const DEFAULT_LEGEND_FONT = "14px Arial";
 
-function extractHeightFromFont(fontStr) {
+function extractHeightFromFont(fontStr: string) {
   return parseFloat(fontStr.split("px")[0]);
 }
 export class SmoothieTSInfo {
@@ -255,13 +255,18 @@ export class CustomSmoothie extends SmoothieChart {
     }
   }
 
-  override render(canvas: HTMLCanvasElement, time: number) {
+  override render(canvas?: HTMLCanvasElement, time?: number) {
     super.render(canvas, time);
-    if (this.enableRenderLegend && this.smoothieTSInfos.length) {
+
+    // smoothie.js requestAnimationFrame loop calls render without arguments
+    // so we need to fallback to the internal this.canvas explicitly
+    const targetCanvas = canvas || (this as any).canvas;
+
+    if (targetCanvas && this.enableRenderLegend && this.smoothieTSInfos.length) {
       const last_render_time = (this as any).lastRenderTimeMillis;
       const timeDelta = Date.now() - last_render_time;
       if (timeDelta < 3) {
-        this.renderLegend(canvas);
+        this.renderLegend(targetCanvas);
       }
     }
   }

@@ -116,11 +116,6 @@ export async function createPolarVisRow(
   await row.init();
 }
 
-// const curr_url_search_string = window.location.search;
-// const url_params: URLSearchParams = new URLSearchParams(
-//   curr_url_search_string,
-// );
-
 export function startRecording() {
   PolarVisRow.is_recording = true;
   PolarVisRow.recorded = {};
@@ -137,6 +132,7 @@ export function startRecording() {
     }
   }
 }
+
 export function stopRecording() {
   PolarVisRow.is_recording = false;
   const polarNameDict = {};
@@ -149,18 +145,13 @@ export function stopRecording() {
       row.polarH10.removeEventListener("ACC", row.recordACCData);
     }
   }
-  download(
-    `Polar-h10_recording_${getCurrentTime()}`,
-    JSON.stringify(PolarVisRow.recorded, null, 2),
-  );
-  PolarVisRow.recorded = {};
   updateRecordBtn();
 }
 
 function getCurrentTime() {
   const date = new Date();
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
@@ -170,29 +161,37 @@ function getCurrentTime() {
 }
 
 function updateRecordBtn() {
-  if (!PolarVisRow.is_recording) {
-    const record_btn = document.getElementById(
-      "record_btn",
-    ) as HTMLButtonElement;
-    if (record_btn !== undefined && record_btn !== null) {
-      if (PolarVisRow.hasAnyActiveStream()) {
-        record_btn.disabled = false;
-      } else {
-        record_btn.disabled = true;
+  if (typeof (window as any).updateGlobalButtons === "function") {
+    (window as any).updateGlobalButtons();
+  } else {
+    if (!PolarVisRow.is_recording) {
+      const record_btn = document.getElementById(
+        "record_btn",
+      ) as HTMLButtonElement;
+      if (record_btn !== undefined && record_btn !== null) {
+        if (PolarVisRow.hasAnyActiveStream()) {
+          record_btn.disabled = false;
+        } else {
+          record_btn.disabled = true;
+        }
       }
     }
   }
 }
 
 function updateDisconnectBtn() {
-  const ble_disconnect_btn = document.getElementById(
-    "ble_disconnect_btn",
-  ) as HTMLButtonElement;
-  if (ble_disconnect_btn !== undefined && ble_disconnect_btn !== null) {
-    if (PolarVisRow.hasAnyActiveStream()) {
-      ble_disconnect_btn.disabled = false;
-    } else {
-      ble_disconnect_btn.disabled = true;
+  if (typeof (window as any).updateGlobalButtons === "function") {
+    (window as any).updateGlobalButtons();
+  } else {
+    const ble_disconnect_btn = document.getElementById(
+      "ble_disconnect_btn",
+    ) as HTMLButtonElement;
+    if (ble_disconnect_btn !== undefined && ble_disconnect_btn !== null) {
+      if (PolarVisRow.hasAnyActiveStream()) {
+        ble_disconnect_btn.disabled = false;
+      } else {
+        ble_disconnect_btn.disabled = true;
+      }
     }
   }
 }
@@ -214,7 +213,7 @@ export function updateSearchURL(config: Object) {
 export class PolarVisRow {
   static polarRowID: number = 0;
   static polarVisRows: PolarVisRow[] = [];
-  static recorded = {};
+  static recorded: any = {};
   static is_recording = false;
   device: BluetoothDevice;
   polarH10: PolarH10;
@@ -900,7 +899,7 @@ export class PolarVisRow {
             1,
             1,
             DEFAULT_ECG_LINE_CHART_OPTION.title?.text ||
-              "EXG raw voltage (0.7–40 Hz)",
+            "EXG raw voltage (0.7–40 Hz)",
             false,
             [],
             true,
