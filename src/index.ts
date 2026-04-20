@@ -302,8 +302,8 @@ if (navigator.bluetooth === undefined) {
 
 // --- EVENT TRIGGER LOGIC ---
 let triggerEntries = [
-  { key: "s", desc: "Stimulus onset" },
-  { key: "r", desc: "Response" }
+  { key: "0", desc: "Event 0" },
+  { key: "1", desc: "Event 1" }
 ];
 let triggerStreamer: ArrowStreamer | null = null;
 
