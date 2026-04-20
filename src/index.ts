@@ -303,30 +303,6 @@ folderLabel.style.fontSize = "14px";
 folderContainer.appendChild(folderLabel);
 right_controls.appendChild(folderContainer);
 
-// Timer Label
-const timerLabel = document.createElement("span");
-timerLabel.textContent = "00:00:00";
-timerLabel.className = "bold-text";
-timerLabel.style.fontSize = "16px";
-timerLabel.style.fontFamily = "monospace";
-right_controls.appendChild(timerLabel);
-
-let recordingTimer: ReturnType<typeof setInterval> | null = null;
-let recordingStartTime: number = 0;
-let recordingStartTimeIso: string = "";
-
-function updateTimerUI() {
-  const diff = Math.floor((Date.now() - recordingStartTime) / 1000);
-  const h = Math.floor(diff / 3600)
-    .toString()
-    .padStart(2, "0");
-  const m = Math.floor((diff % 3600) / 60)
-    .toString()
-    .padStart(2, "0");
-  const s = (diff % 60).toString().padStart(2, "0");
-  timerLabel.textContent = `${h}:${m}:${s}`;
-}
-
 // Record Button
 let is_recording = false;
 const record_btn = createButtonIcon(
@@ -351,9 +327,34 @@ const recording_icon = document.createElement("i");
 recording_icon.classList.add("material-icons", "hide", "red");
 recording_icon.textContent = "radio_button_checked";
 const record_icon = record_btn.children[0];
-record_btn.setAttribute("data-tooltip", "Start recording");
+// record_btn.setAttribute("data-tooltip", "Start recording");
+recordTooltipUpdate();
 record_btn.appendChild(recording_icon);
 record_btn.disabled = true;
+
+// Timer Label
+const timerLabel = document.createElement("span");
+timerLabel.textContent = "00:00:00";
+timerLabel.className = "bold-text";
+timerLabel.style.fontSize = "16px";
+timerLabel.style.fontFamily = "monospace";
+right_controls.appendChild(timerLabel);
+
+let recordingTimer: ReturnType<typeof setInterval> | null = null;
+let recordingStartTime: number = 0;
+let recordingStartTimeIso: string = "";
+
+function updateTimerUI() {
+  const diff = Math.floor((Date.now() - recordingStartTime) / 1000);
+  const h = Math.floor(diff / 3600)
+    .toString()
+    .padStart(2, "0");
+  const m = Math.floor((diff % 3600) / 60)
+    .toString()
+    .padStart(2, "0");
+  const s = (diff % 60).toString().padStart(2, "0");
+  timerLabel.textContent = `${h}:${m}:${s}`;
+}
 
 // --- MAIN CONTENT AREA ---
 const content = document.createElement("div");
@@ -929,7 +930,8 @@ async function onRecordClicked(ev: any) {
     recording_icon.textContent = "radio_button_checked";
     recording_icon.classList.add("hide");
     record_icon.classList.remove("hide");
-    record_btn.setAttribute("data-tooltip", "Start recording");
+    // record_btn.setAttribute("data-tooltip", "Start recording");
+    recordTooltipUpdate();
 
     ble_conn_btn.disabled = false;
     vernier_conn_btn.disabled = false;
@@ -945,7 +947,8 @@ async function onRecordClicked(ev: any) {
     // trigger_floating_btn.disabled = true;
     record_icon.classList.add("hide");
     recording_icon.classList.remove("hide");
-    record_btn.setAttribute("data-tooltip", "Stop recording");
+    // record_btn.setAttribute("data-tooltip", "Stop recording");
+    recordTooltipUpdate();
     record_btn.classList.remove("btn-primary");
 
     // Reset and Start Timer
@@ -1032,6 +1035,7 @@ async function bleConnectHandle() {
   }
   await createPolarVisRow(polar_content_div, device);
   updateButtons();
+  bleConnectHandle();
 }
 
 async function vernierConnectHandle() {
@@ -1041,6 +1045,7 @@ async function vernierConnectHandle() {
     const row = new VernierVisRow(vernier_content_div, device);
     await row.init();
     updateButtons();
+    bleConnectHandle();
   } catch (err) {
     console.error(err);
     alert(err);
@@ -1076,6 +1081,7 @@ function updateButtons() {
   if (!is_recording) {
     record_btn.disabled = !(hasStream && directoryHandle !== null);
   }
+  recordTooltipUpdate();
 }
 
 (window as any).updateGlobalButtons = updateButtons;
@@ -1092,6 +1098,11 @@ window.onbeforeunload = function (event) {
 function location_reload() {
   location.reload();
 }
+
+// (window as any).globalUpdate = () => {
+//   return recordTooltipUpdate();
+// };
+
 if (!(window as any).IS_PRODUCTION) {
   new EventSource("/esbuild").addEventListener("change", location_reload);
 }
