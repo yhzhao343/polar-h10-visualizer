@@ -5,6 +5,20 @@
   src: url("google-material-icon.woff2") format("woff2");
 }
 
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 400;
+  src: url("roboto-mono-regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Roboto Mono";
+  font-style: normal;
+  font-weight: 700;
+  src: url("roboto-mono-bold.woff2") format("woff2");
+}
+
 .material-symbols-outlined {
   font-variation-settings:
     "FILL" 0,
