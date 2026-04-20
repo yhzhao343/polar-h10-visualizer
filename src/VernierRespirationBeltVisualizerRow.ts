@@ -3,6 +3,7 @@ import { CustomSmoothie, SmoothieTSInfo, genSmoothieLegendInfo } from "./CustomS
 import { createButtonIcon } from "./helpers";
 import { ArrowStreamer } from "./ArrowStreamer";
 import { Schema, Field, Float64 } from "apache-arrow";
+import { DEFAULT_MILLIS_PER_PX } from "./consts";
 
 function createDiv(id: string, parent?: HTMLElement, classList: string[] = [], textContent: string = "") {
     const div = document.createElement("div");
@@ -117,22 +118,13 @@ export class VernierVisRow {
     async startRecording(dirHandle: FileSystemDirectoryHandle) {
 
         if (this.forceIsOn()) {
-            try {
-                const forceFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_Force.arrow`, { create: true });
-                this.forceStreamer = new ArrowStreamer(forceFileHandle, this.getForceSchema());
-            } catch (error) {
-                this.forceStreamer = undefined;
-            }
+            const forceFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_Force.arrow`, { create: true });
+            this.forceStreamer = new ArrowStreamer(forceFileHandle, this.getForceSchema())
         }
 
         if (this.brIsOn()) {
-            try {
-                const brFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_BR.arrow`, { create: true });
-                this.brStreamer = new ArrowStreamer(brFileHandle, this.getBRSchema());
-            } catch (error) {
-                this.brStreamer = undefined;
-            }
-
+            const brFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_BR.arrow`, { create: true });
+            this.brStreamer = new ArrowStreamer(brFileHandle, this.getBRSchema())
         }
 
         this.is_recording = true;
@@ -347,8 +339,13 @@ export class VernierVisRow {
 
             this.forceCanvas = createCanvas("forceCanvas", this.forceDiv);
             this.forceChart = new CustomSmoothie({
-                millisPerPixel: 20,
-                grid: { strokeStyle: "#484f58", lineWidth: 1, millisPerLine: 5000 },
+                limitFPS: 60,
+                millisPerPixel: DEFAULT_MILLIS_PER_PX * 2,
+                scaleSmoothing: 0.1,
+                tooltip: false,
+                minValueScale: 1,
+                maxValueScale: 1,
+                grid: { strokeStyle: "#484f58", fillStyle: "#000000", lineWidth: 1, millisPerLine: 1000, borderVisible: false },
                 title: { text: "Respiration Force (N)", fillStyle: "#ffffff80", fontSize: 14, fontFamily: "Arial", verticalAlign: "bottom" },
                 minValue: this.forceMin,
                 maxValue: this.forceMax
@@ -399,8 +396,13 @@ export class VernierVisRow {
 
             this.brCanvas = createCanvas("brCanvas", this.brDiv);
             this.brChart = new CustomSmoothie({
-                millisPerPixel: 20,
-                grid: { strokeStyle: "#484f58", lineWidth: 1, millisPerLine: 5000 },
+                limitFPS: 60,
+                millisPerPixel: DEFAULT_MILLIS_PER_PX * 2,
+                scaleSmoothing: 0.1,
+                tooltip: false,
+                minValueScale: 1,
+                maxValueScale: 1,
+                grid: { strokeStyle: "#484f58", fillStyle: "#000000", lineWidth: 1, millisPerLine: 1000, borderVisible: false },
                 title: { text: "Breathing Rate (bpm)", fillStyle: "#ffffff80", fontSize: 14, fontFamily: "Arial", verticalAlign: "bottom" },
                 minValue: this.brMin,
                 maxValue: this.brMax
