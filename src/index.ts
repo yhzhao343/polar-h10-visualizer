@@ -35,10 +35,7 @@ function getCurrentTime() {
 }
 
 (window as any).hasAnyConnectedSensor = () => {
-  return (
-    PolarVisRow.polarVisRows.length > 0 ||
-    VernierVisRow.vernierVisRows.length > 0
-  );
+  return PolarVisRow.polarVisRows.length || VernierVisRow.vernierVisRows.length;
 };
 
 const webapp_container = document.createElement("div");
@@ -160,7 +157,7 @@ trigger_btn.setAttribute("data-tooltip", "Configure Event Triggers");
 const trigger_history = document.createElement("div");
 trigger_history.id = "trigger_history";
 trigger_history.style.height = "36px";
-trigger_history.style.width = "260px";
+trigger_history.style.width = "380px";
 trigger_history.style.flex = "none";
 trigger_history.style.overflowY = "auto";
 trigger_history.style.background = "#181a1b";
@@ -185,6 +182,35 @@ const trigger_clear_btn = createButtonIcon(
   ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
 trigger_clear_btn.setAttribute("data-tooltip", "Clear Display");
+
+// Floating Trigger Panel Toggle
+let isFloatingPanelOpen = false;
+
+const trigger_floating_btn = createButtonIcon(
+  "touch_app",
+  0,
+  "trigger_floating_btn",
+  middle_center,
+  true,
+  toggleFloatingPanel,
+  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
+);
+trigger_floating_btn.setAttribute(
+  "data-tooltip",
+  "Toggle Floating Trigger Panel",
+);
+// trigger_floating_btn.disabled = true;
+
+function toggleFloatingPanel() {
+  isFloatingPanelOpen = !isFloatingPanelOpen;
+  floatingTriggerPanel.style.display = isFloatingPanelOpen ? "flex" : "none";
+  if (isFloatingPanelOpen) {
+    renderFloatingTriggerPanel();
+    trigger_floating_btn.classList.remove("btn-primary");
+  } else {
+    trigger_floating_btn.classList.add("btn-primary");
+  }
+}
 
 // Middle-Right: Meta Inputs
 const middle_right = document.createElement("div");
@@ -359,6 +385,70 @@ let triggerEntries = [
 ];
 let triggerStreamer: ArrowStreamer | null = null;
 
+// Floating Panel construction
+const floatingTriggerPanel = document.createElement("div");
+floatingTriggerPanel.id = "floating_trigger_panel";
+floatingTriggerPanel.style.position = "fixed";
+floatingTriggerPanel.style.bottom = "20px";
+floatingTriggerPanel.style.right = "20px";
+floatingTriggerPanel.style.background = "rgba(27, 29, 31, 0.9)";
+floatingTriggerPanel.style.border = "1px solid #484f58";
+floatingTriggerPanel.style.borderRadius = "8px";
+floatingTriggerPanel.style.padding = "12px";
+floatingTriggerPanel.style.display = "none";
+floatingTriggerPanel.style.flexDirection = "column";
+floatingTriggerPanel.style.gap = "8px";
+floatingTriggerPanel.style.zIndex = "1000";
+floatingTriggerPanel.style.boxShadow = "0 4px 12px rgba(0,0,0,0.5)";
+document.body.appendChild(floatingTriggerPanel);
+
+function renderFloatingTriggerPanel() {
+  floatingTriggerPanel.innerHTML = "";
+
+  const title = document.createElement("div");
+  title.className = "bold-text";
+  title.style.color = "#ffffff";
+  title.style.marginBottom = "4px";
+  title.style.textAlign = "center";
+  title.style.fontSize = "14px";
+  title.textContent = "Triggers";
+  floatingTriggerPanel.appendChild(title);
+
+  const closeBtn = document.createElement("button");
+  closeBtn.className = "btn btn-clear float-right";
+  closeBtn.style.position = "absolute";
+  closeBtn.style.top = "8px";
+  closeBtn.style.right = "8px";
+  closeBtn.onclick = toggleFloatingPanel;
+  floatingTriggerPanel.appendChild(closeBtn);
+
+  if (triggerEntries.length === 0) {
+    const empty = document.createElement("div");
+    empty.style.color = "#888";
+    empty.style.fontSize = "12px";
+    empty.style.textAlign = "center";
+    empty.style.marginTop = "8px";
+    empty.textContent = "No triggers configured.";
+    floatingTriggerPanel.appendChild(empty);
+    return;
+  }
+
+  triggerEntries.forEach((entry) => {
+    if (entry.key.trim() === "") return;
+    const btn = document.createElement("button");
+    btn.className = "btn btn-primary btn-sm";
+    btn.style.width = "100%";
+    btn.style.textAlign = "left";
+    btn.style.fontFamily = "monospace";
+    btn.textContent = `[${entry.key}] ${entry.desc}`;
+    btn.disabled = !is_recording;
+    btn.onclick = () => {
+      if (is_recording) fireTrigger(entry.key);
+    };
+    floatingTriggerPanel.appendChild(btn);
+  });
+}
+
 // Modal construction
 const triggerModal = document.createElement("div");
 triggerModal.className = "modal";
@@ -366,7 +456,7 @@ triggerModal.id = "trigger-modal";
 
 const modalOverlay = document.createElement("a");
 modalOverlay.className = "modal-overlay";
-modalOverlay.style.background = "rgba(0, 0, 0, 0.85)"; // Enhanced dark-mode overlay
+modalOverlay.style.background = "rgba(0, 0, 0, 0.40)"; // Enhanced dark-mode overlay
 modalOverlay.setAttribute("aria-label", "Close");
 modalOverlay.onclick = () => triggerModal.classList.remove("active");
 
@@ -374,6 +464,8 @@ const modalContainer = document.createElement("div");
 modalContainer.className = "modal-container";
 modalContainer.style.background = "#1b1d1f";
 modalContainer.style.color = "#e8e8e8";
+modalContainer.style.maxWidth = "600px"; // Widen modal to fit row nicely
+modalContainer.style.width = "90vw";
 
 const modalHeader = document.createElement("div");
 modalHeader.className = "modal-header";
@@ -451,41 +543,14 @@ function renderTriggerModal() {
     row.style.display = "flex";
     row.style.gap = "8px";
     row.style.marginBottom = "8px";
+    row.style.alignItems = "center";
 
-    const keyInput = document.createElement("input");
-    keyInput.id = `modal-${top_input_counter}`;
-    keyInput.className = "form-input input-sm dark-input";
-    keyInput.style.width = "50px";
-    keyInput.maxLength = 1;
-    keyInput.value = entry.key;
-    keyInput.disabled = is_recording || entry.builtIn;
-    keyInput.placeholder = "Key";
-    keyInput.onchange = (e) => {
-      const val = (e.target as HTMLInputElement).value;
-      if (val === "[" || val === "]") {
-        alert("[ and ] are reserved for start/stop triggers.");
-        (e.target as HTMLInputElement).value = triggerEntries[idx - 2].key;
-        return;
-      }
-      triggerEntries[idx - 2].key = val;
-    };
-    top_input_counter += 1;
-
-    const descInput = document.createElement("input");
-    descInput.className = "form-input input-sm dark-input flex-grow";
-    descInput.value = entry.desc;
-    descInput.disabled = is_recording || entry.builtIn;
-    descInput.placeholder = "Description";
-    descInput.onchange = (e) => {
-      triggerEntries[idx - 2].desc = (e.target as HTMLInputElement).value;
-    };
-    descInput.id = `modal-${top_input_counter}`;
-    top_input_counter += 1;
-
+    // Delete Button (Left side)
     const delBtn = document.createElement("button");
     delBtn.className = "btn btn-error btn-sm";
     delBtn.textContent = "−";
     delBtn.disabled = is_recording;
+    delBtn.style.flexShrink = "0";
 
     if (entry.builtIn) {
       delBtn.style.visibility = "hidden"; // Cannot delete built-ins
@@ -493,32 +558,106 @@ function renderTriggerModal() {
       delBtn.onclick = () => {
         triggerEntries.splice(idx - 2, 1); // Offset for the two built-ins
         renderTriggerModal();
+        if (isFloatingPanelOpen) renderFloatingTriggerPanel();
       };
     }
 
+    const keyInput = document.createElement("input");
+    keyInput.id = `modal-${top_input_counter}`;
+    keyInput.className = "form-input input-sm dark-input";
+    keyInput.style.width = "30px";
+    keyInput.style.flexShrink = "0";
+    keyInput.maxLength = 1;
+    keyInput.value = entry.key;
+    keyInput.disabled = is_recording || entry.builtIn;
+    keyInput.placeholder = "Key";
+
+    keyInput.onchange = (e) => {
+      const val = (e.target as HTMLInputElement).value;
+
+      // Protect built-ins
+      if (val === "[" || val === "]") {
+        alert("[ and ] are reserved for start/stop triggers.");
+        (e.target as HTMLInputElement).value = triggerEntries[idx - 2].key;
+        return;
+      }
+
+      const actualEntry = triggerEntries[idx - 2];
+      const isDuplicate = triggerEntries.some(
+        (t) => t !== actualEntry && t.key.toLowerCase() === val.toLowerCase(),
+      );
+
+      // Auto-delete duplicates after 1s
+      if (isDuplicate && val.trim() !== "") {
+        alert(`The key '${val}' is already used. This entry will be removed.`);
+        actualEntry.key = val;
+        keyInput.style.borderColor = "#ff453a";
+        setTimeout(() => {
+          const i = triggerEntries.indexOf(actualEntry);
+          if (i > -1) {
+            triggerEntries.splice(i, 1);
+            renderTriggerModal();
+            if (isFloatingPanelOpen) renderFloatingTriggerPanel();
+          }
+        }, 1000);
+        return;
+      }
+
+      actualEntry.key = val;
+      if (isFloatingPanelOpen) renderFloatingTriggerPanel();
+    };
+    top_input_counter += 1;
+
+    const descInput = document.createElement("input");
+    descInput.className = "form-input input-sm dark-input";
+    descInput.style.width = "375px";
+    descInput.value = entry.desc;
+    descInput.disabled = is_recording || entry.builtIn;
+    descInput.placeholder = "Description";
+    descInput.onchange = (e) => {
+      triggerEntries[idx - 2].desc = (e.target as HTMLInputElement).value;
+      if (isFloatingPanelOpen) renderFloatingTriggerPanel();
+    };
+    descInput.id = `modal-${top_input_counter}`;
+    top_input_counter += 1;
+
+    // Send Button for custom triggers (Right side)
+    const sendBtn = document.createElement("button");
+    sendBtn.className = "btn btn-success btn-sm tooltip";
+    sendBtn.setAttribute("data-tooltip", "Fire Trigger Manually");
+    sendBtn.textContent = "Send";
+    sendBtn.disabled = !is_recording;
+    sendBtn.style.flexShrink = "0";
+    if (entry.builtIn) {
+      sendBtn.style.visibility = "hidden";
+    } else {
+      sendBtn.onclick = () => {
+        if (entry.key.trim() !== "") {
+          if (is_recording) fireTrigger(entry.key);
+        } else {
+          alert("Please assign a key first.");
+        }
+      };
+    }
+
+    // Append in correct order: Delete -> Key -> Description -> Send
+    row.appendChild(delBtn);
     row.appendChild(keyInput);
     row.appendChild(descInput);
-    row.appendChild(delBtn);
+    row.appendChild(sendBtn);
+
     triggerListDiv.appendChild(row);
   });
+
   addTriggerBtn.disabled = is_recording;
   modalTriggerHistoryWrapper.style.display = is_recording ? "block" : "none";
 }
 renderTriggerModal();
 
-window.addEventListener("keydown", (e) => {
-  if (e.repeat) return; // Prevent holding-down spam
-  if (
-    e.target &&
-    ["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
-  )
-    return;
-
-  // Block manual [ and ] to preserve system integrity
-  if (e.key === "[" || e.key === "]") return;
-
+// Shared trigger function
+function fireTrigger(key: string) {
   const entry = triggerEntries.find(
-    (t) => t.key.toLowerCase() === e.key.toLowerCase(),
+    (t) => t.key.toLowerCase() === key.toLowerCase(),
   );
   if (entry) {
     const now = Date.now();
@@ -548,10 +687,24 @@ window.addEventListener("keydown", (e) => {
     if (is_recording && triggerStreamer) {
       triggerStreamer.push({
         epoch_timestamp_ms: now,
-        key_code: e.key.charCodeAt(0),
+        key_code: entry.key.charCodeAt(0),
       });
     }
   }
+}
+
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return; // Prevent holding-down spam
+  if (
+    e.target &&
+    ["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
+  )
+    return;
+
+  // Block manual [ and ] to preserve system integrity
+  if (e.key === "[" || e.key === "]") return;
+
+  if (is_recording) fireTrigger(e.key);
 });
 
 // --- FUNCTIONALITY ---
@@ -613,7 +766,9 @@ async function convertArrowToCSV(
 async function onRecordClicked(ev: any) {
   if (is_recording) {
     is_recording = false;
+    record_btn.classList.add("btn-primary");
     renderTriggerModal(); // Re-enable trigger settings inputs
+    if (isFloatingPanelOpen) renderFloatingTriggerPanel();
 
     // Stop Timer
     if (recordingTimer) clearInterval(recordingTimer);
@@ -621,6 +776,7 @@ async function onRecordClicked(ev: any) {
 
     // Lock UI during shutdown and CSV parsing
     ble_conn_btn.disabled = true;
+    // trigger_floating_btn.disabled = false;
     vernier_conn_btn.disabled = true;
     record_btn.disabled = true;
     recording_icon.textContent = "hourglass_empty"; // Indicate processing
@@ -752,11 +908,14 @@ async function onRecordClicked(ev: any) {
 
     is_recording = true;
     renderTriggerModal(); // Disable trigger settings inputs
+    if (isFloatingPanelOpen) renderFloatingTriggerPanel();
     ble_conn_btn.disabled = true;
     vernier_conn_btn.disabled = true;
+    // trigger_floating_btn.disabled = true;
     record_icon.classList.add("hide");
     recording_icon.classList.remove("hide");
     record_btn.setAttribute("data-tooltip", "Stop recording");
+    record_btn.classList.remove("btn-primary");
 
     // Reset and Start Timer
     timerLabel.textContent = "00:00:00";

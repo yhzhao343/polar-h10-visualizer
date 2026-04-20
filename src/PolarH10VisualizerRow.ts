@@ -360,6 +360,12 @@ export class PolarVisRow {
         this.hrStreamer = undefined;
       }
     }
+    if (this.filterConfigBtn) {
+      this.filterConfigBtn.disabled = true;
+    }
+    if (this.bodypartSelect) {
+      this.bodypartSelect.disabled = true;
+    }
     this.is_recording = true;
   }
 
@@ -375,6 +381,12 @@ export class PolarVisRow {
     if (this.hrStreamer) {
       await this.hrStreamer.close();
       this.hrStreamer = undefined;
+    }
+    if (this.filterConfigBtn) {
+      this.filterConfigBtn.disabled = false;
+    }
+    if (this.bodypartSelect) {
+      this.bodypartSelect.disabled = false;
     }
     this.is_recording = false;
   }
