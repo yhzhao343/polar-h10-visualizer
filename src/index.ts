@@ -161,7 +161,7 @@ trigger_btn.setAttribute("data-tooltip", "Configure Event Triggers");
 const trigger_history = document.createElement("div");
 trigger_history.id = "trigger_history";
 trigger_history.style.height = "36px";
-trigger_history.style.width = "380px";
+trigger_history.style.width = "260px";
 trigger_history.style.flex = "none";
 trigger_history.style.overflowY = "auto";
 trigger_history.style.background = "#181a1b";
@@ -1035,7 +1035,6 @@ async function bleConnectHandle() {
   }
   await createPolarVisRow(polar_content_div, device);
   updateButtons();
-  bleConnectHandle();
 }
 
 async function vernierConnectHandle() {
@@ -1045,7 +1044,6 @@ async function vernierConnectHandle() {
     const row = new VernierVisRow(vernier_content_div, device);
     await row.init();
     updateButtons();
-    bleConnectHandle();
   } catch (err) {
     console.error(err);
     alert(err);
