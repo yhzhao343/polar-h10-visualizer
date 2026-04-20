@@ -38,6 +38,10 @@ function getCurrentTime() {
   return PolarVisRow.polarVisRows.length || VernierVisRow.vernierVisRows.length;
 };
 
+(window as any).hasAnyActiveStream = () => {
+  return PolarVisRow.hasAnyActiveStream() || VernierVisRow.hasAnyActiveStream();
+};
+
 const webapp_container = document.createElement("div");
 webapp_container.id = "webapp_container";
 webapp_container.classList.add("container");
@@ -722,6 +726,33 @@ async function selectFolderHandle() {
   }
 }
 
+function recordTooltipUpdate() {
+  if (is_recording) {
+    record_btn.setAttribute("data-tooltip", "Stop recording");
+    return;
+  }
+  let tooltip_message = "";
+  let failed_any = false;
+  if (!(window as any).hasAnyConnectedSensor()) {
+    tooltip_message += "Connect Sensor\n";
+    failed_any = true;
+  }
+  if (!(window as any).hasAnyActiveStream()) {
+    tooltip_message += "Start Streaming\n";
+    failed_any = true;
+  }
+  if (!directoryHandle) {
+    tooltip_message += "Select Export Dir\n";
+    failed_any = true;
+  }
+  if (failed_any) {
+    tooltip_message += "To Enable Recording";
+    record_btn.setAttribute("data-tooltip", tooltip_message);
+  } else {
+    record_btn.setAttribute("data-tooltip", "Start Recording");
+  }
+}
+
 async function convertArrowToCSV(
   fileHandle: FileSystemFileHandle,
   dirHandle: FileSystemDirectoryHandle,
@@ -1040,7 +1071,7 @@ async function stopStreamExit() {
 }
 
 function updateButtons() {
-  const hasStream = (window as any).hasAnyConnectedSensor();
+  const hasStream = (window as any).hasAnyActiveStream();
   ble_disconnect_btn.disabled = !hasStream;
   if (!is_recording) {
     record_btn.disabled = !(hasStream && directoryHandle !== null);
