@@ -263,25 +263,25 @@ export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 };
 
 export const X_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#f0883e",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#f0883e",
+};
 
 export const Y_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#f778ba",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#f778ba",
+};
 
 export const Z_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-  {
-    lineWidth: 2,
-    interpolation: "linear",
-    strokeStyle: "#388afd",
-  };
+{
+  lineWidth: 2,
+  interpolation: "linear",
+  strokeStyle: "#388afd",
+};
 
 export const MAG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
@@ -306,27 +306,58 @@ export const PolarSensorNames = Object.keys(PolarSensorType).filter((t) =>
   isNaN(Number(t)),
 );
 
-// export interface PolarH10Data {
-//   epoch_timestamps_ms: any;
-//   type: (typeof PolarSensorNames)[number];
-//   samples?: Int16Array | Int32Array;
-//   sample_timestamp_ms: number;
-//   prev_sample_timestamp_ms: number;
-//   recv_epoch_time_ms: number;
-//   event_time_offset_ms: number;
-// }
-
 export const FILTER_TYPES = ["lowpass", "highpass", "bandpass"];
 export const FILTER_CHARACTERISTICS = ["butterworth", "bessel"];
 export interface FilterInfo {
   type: (typeof FILTER_TYPES)[number];
   order: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
   characteristic: (typeof FILTER_CHARACTERISTICS)[number];
-  Fs: number;
+  Fs?: number;
   Fc?: number;
   Fl?: number;
   Fh?: number;
   BW?: number;
   gain?: number;
   preGain: boolean | number;
+}
+
+export const initECGFilterSettings: FilterInfo = {
+  type: "highpass",
+  order: ECG_FILTER_ORDER,
+  characteristic: "butterworth",
+  Fs: ECG_SAMPLE_RATE_HZ,
+  Fc: ECG_HIGHLOWPASS_CUTOFF_HZ,
+  Fl: ECG_BANDPASS_LOW_CUT_HZ,
+  Fh: ECG_BANDPASS_HIGH_CUT_HZ,
+  BW: ECG_BANDPASS_HIGH_CUT_HZ - ECG_BANDPASS_LOW_CUT_HZ,
+  gain: undefined,
+  preGain: false,
+}
+
+export const initACCLowpassFilterSettings: FilterInfo = {
+  type: "lowpass",
+  order: AAC_LOWPASS_ORDER,
+  characteristic: "butterworth",
+  // Fs: this.acc_sample_rate_hz,
+  Fc: AAC_LOWPASS_CUTOFF_HZ,
+  Fl: 1,
+  Fh: 10,
+  BW: undefined,
+  gain: undefined,
+  preGain: false,
+}
+
+export const initACCFilterSettings: FilterInfo = {
+  type: "bandpass",
+  order: AAC_FILTER_ORDER,
+  characteristic: "butterworth",
+  // Fs: this.acc_sample_rate_hz,
+  Fc: Math.sqrt(
+    AAC_FILTER_BANDPASS_LOW_CUT_HZ * AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
+  ),
+  Fl: AAC_FILTER_BANDPASS_LOW_CUT_HZ,
+  Fh: AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
+  BW: AAC_FILTER_BANDPASS_HIGH_CUT_HZ - AAC_FILTER_BANDPASS_LOW_CUT_HZ,
+  gain: undefined,
+  preGain: false,
 }

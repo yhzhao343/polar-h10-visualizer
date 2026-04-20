@@ -1,8 +1,9 @@
 import { TimeSeries } from "smoothie";
 import { CustomSmoothie, SmoothieTSInfo, genSmoothieLegendInfo } from "./CustomSmoothie";
-import { createButtonIcon } from "./PolarH10VisualizerRow";
+import { createButtonIcon } from "./helpers";
+import { ArrowStreamer } from "./ArrowStreamer";
+import { Schema, Field, Float64 } from "apache-arrow";
 
-// Duplicate a few lightweight DOM helpers to keep files decoupled
 function createDiv(id: string, parent?: HTMLElement, classList: string[] = [], textContent: string = "") {
     const div = document.createElement("div");
     div.id = id;
@@ -58,8 +59,6 @@ function resizeSmoothieGen(chart: any, widthRatio: number, heightRatio: number) 
 export class VernierVisRow {
     static vernierRowID: number = 0;
     static vernierVisRows: VernierVisRow[] = [];
-    static recorded: any = {};
-    static is_recording = false;
 
     device: any;
     deviceName: string;
@@ -100,7 +99,12 @@ export class VernierVisRow {
     dataCtrl!: HTMLDivElement;
     handleDataBound!: (sensor: any) => void;
 
-    // Processing buffers for breathing rate
+    // Arrow Logging
+    forceStreamer?: ArrowStreamer;
+    brStreamer?: ArrowStreamer;
+
+    is_recording: boolean = false;
+
     private forceDataWindow: number[] = [];
     private forceTimeWindow: number[] = [];
 
@@ -110,18 +114,79 @@ export class VernierVisRow {
         this.deviceName = device.name || "Vernier Respiration Belt";
     }
 
-    static createNewRecordEntry(row: VernierVisRow) {
-        const name = row.deviceName;
-        if (!(name in VernierVisRow.recorded)) {
-            VernierVisRow.recorded[name] = {
-                Force: { data: [], timestamp: [] },
-                BreathingRate: { data: [], timestamp: [] }
-            };
+    async startRecording(dirHandle: FileSystemDirectoryHandle) {
+
+        if (this.forceIsOn()) {
+            try {
+                const forceFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_Force.arrow`, { create: true });
+                this.forceStreamer = new ArrowStreamer(forceFileHandle, this.getForceSchema());
+            } catch (error) {
+                this.forceStreamer = undefined;
+            }
         }
+
+        if (this.brIsOn()) {
+            try {
+                const brFileHandle = await dirHandle.getFileHandle(`Vernier_${this.deviceName}_BR.arrow`, { create: true });
+                this.brStreamer = new ArrowStreamer(brFileHandle, this.getBRSchema());
+            } catch (error) {
+                this.brStreamer = undefined;
+            }
+
+        }
+
+        this.is_recording = true;
+    }
+
+    getForceMeta() {
+        return new Map([
+            ["sensor_name", "Vernier respiration belt"],
+            ["device_name", this.deviceName],
+            ["modality", "Force"],
+        ]);
+    }
+
+    getForceSchema() {
+        return new Schema([
+            new Field("epoch_timestamp_ms", new Float64(), false),
+            new Field("Force_N", new Float64(), false),
+        ], this.getForceMeta());
+    }
+
+    getBRMeta() {
+        return new Map([
+            ["sensor_name", "Vernier respiration belt"],
+            ["device_name", this.deviceName],
+            ["modality", "BR"],
+        ])
+    }
+
+    getBRSchema() {
+        return new Schema([
+            new Field("epoch_timestamp_ms", new Float64(), false),
+            new Field("BR_bpm", new Float64(), false),
+        ], this.getBRMeta());
+    }
+
+    async stopRecording() {
+        if (this.forceStreamer) {
+            await this.forceStreamer.close();
+            this.forceStreamer = undefined;
+        }
+        if (this.brStreamer) {
+            await this.brStreamer.close();
+            this.brStreamer = undefined;
+        }
+        this.is_recording = false;
     }
 
     static hasAnyActiveStream() {
-        return VernierVisRow.vernierVisRows.length > 0;
+        // return VernierVisRow.vernierVisRows.length > 0;
+        for (let i = 0; i < VernierVisRow.vernierVisRows.length - 1; i++) {
+            const row = VernierVisRow.vernierVisRows[i];
+            if (row.forceDiv !== undefined || row.brDiv !== undefined) return true;
+        }
+        return false;
     }
 
     static includesDuplicate(self: VernierVisRow, key: string = "device"): number {
@@ -137,7 +202,6 @@ export class VernierVisRow {
     async init() {
         this.sensorRowDiv = createDiv(`vernierSensorDiv-${VernierVisRow.vernierRowID}`, this.parent, ["polar-sensor-row", "flexbox"]);
 
-        // --- UI Setup: Left Panel ---
         this.optionDiv = createDiv(`vernierOptionDiv`, this.sensorRowDiv, ["polar-sensor-left-panel", "center"]);
 
         this.order = VernierVisRow.vernierVisRows.length;
@@ -147,12 +211,11 @@ export class VernierVisRow {
 
         const disconnectDiv = createDiv("disconnectDiv", undefined, ["flexbox", "disconnect"]);
         const disBtn = createButtonIcon(
-            "delete", "distBtn", disconnectDiv, false, () => this.disconnect(), ["btn", "btn-primary", "btn-sm", "s-circle"], () => VernierVisRow.vernierRowID
+            "delete", VernierVisRow.vernierRowID, "VernierDistBtn", disconnectDiv, false, () => this.disconnect(), ["btn", "btn-primary", "btn-sm", "s-circle"]
         );
         addTooltip(disBtn, "disconnect", "top");
 
         const nameDiv = createDiv("nameDiv", undefined, ["flexbox", "flex"]);
-        // Using mid-text to shrink the font slightly so "Vernier Respiration Belt" fits gracefully
         createDiv("devicename", nameDiv, ["flexbox", "mid-text"], this.deviceName);
 
         deviceInfoDiv.appendChild(disconnectDiv);
@@ -160,13 +223,13 @@ export class VernierVisRow {
 
         this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
         this.orderUpBtn = createButtonIcon(
-            "arrow-up", "orderUpBtn", this.rowOrder, false, this.moveUp, ["btn", "btn-primary", "btn-sm"], () => VernierVisRow.vernierRowID
+            "arrow-up", VernierVisRow.vernierRowID, "VernierOrderUpBtn", this.rowOrder, false, this.moveUp, ["btn", "btn-primary", "btn-sm"]
         ) as HTMLButtonElement;
         addTooltip(this.orderUpBtn, "Move up", "right");
         this.orderUpBtn.disabled = VernierVisRow.vernierVisRows.length < 1;
 
         this.orderDownBtn = createButtonIcon(
-            "arrow-down", "orderDownBtn", this.rowOrder, false, this.moveDown, ["btn", "btn-primary", "btn-sm"], () => VernierVisRow.vernierRowID
+            "arrow-down", VernierVisRow.vernierRowID, "VernierOrderDownBtn", this.rowOrder, false, this.moveDown, ["btn", "btn-primary", "btn-sm"]
         ) as HTMLButtonElement;
         addTooltip(this.orderDownBtn, "Move down", "right");
         this.orderDownBtn.disabled = true;
@@ -187,7 +250,6 @@ export class VernierVisRow {
         brCtrlDiv.appendChild(brSwitch);
         this.brSwitchInput = brSwitch.querySelector("input") as HTMLInputElement;
 
-        // --- UI Setup: Chart Area ---
         this.visContainerDiv = createDiv("vernierVisContainer", this.sensorRowDiv, ["visContainer", "full-width"]);
 
         this.forceTS = new TimeSeries();
@@ -196,15 +258,12 @@ export class VernierVisRow {
         this.forceInfo = new SmoothieTSInfo(undefined, undefined, "Force: -- N", "left", 2, 30, true, "top", "bold 20px 'Roboto Mono'", "#32ff4bcc");
         this.brInfo = new SmoothieTSInfo(undefined, undefined, "BR: -- bpm", "left", 2, 30, true, "top", "bold 20px 'Roboto Mono'", "#ff70ffcc");
 
-        // --- Connection Sharing Logic ---
         const duplicateInd = VernierVisRow.includesDuplicate(this, "device");
         if (duplicateInd < 0) {
-            // First time this device is connected
             this.forceSensor = this.device.getSensor(1);
             this.forceSensor.setEnabled(true);
             await this.device.start();
         } else {
-            // Piggyback off existing connection
             this.forceSensor = VernierVisRow.vernierVisRows[duplicateInd].forceSensor;
         }
 
@@ -214,9 +273,11 @@ export class VernierVisRow {
         VernierVisRow.vernierRowID++;
         VernierVisRow.vernierVisRows.push(this);
 
-        // Default toggle Force ON
         this.forceSwitchInput.checked = true;
         this.onToggleForce({ target: this.forceSwitchInput });
+
+        this.brSwitchInput.checked = true
+        this.onToggleBR({ target: this.brSwitchInput });
     }
 
     moveUp = (ev: any) => {
@@ -378,6 +439,14 @@ export class VernierVisRow {
         }
     };
 
+    forceIsOn() {
+        return this.forceDiv !== undefined;
+    }
+
+    brIsOn() {
+        return this.brDiv !== undefined;
+    }
+
     onWheelForce = (ev: any) => {
         if (this.forceChart && !this.forceChart.yScaleIsAuto()) {
             ev.preventDefault();
@@ -418,19 +487,18 @@ export class VernierVisRow {
             this.brInfo.text = `BR:${br.toFixed(1).padStart(6, " ")}(bpm)`;
         }
 
-        if (VernierVisRow.is_recording) {
-            // Avoid duplicate data arrays when multiple graphs read the same sensor
-            const firstRowForDevice = VernierVisRow.vernierVisRows.find(r => r.device.id === this.device.id);
-            if (firstRowForDevice === this) {
-                const name = this.deviceName;
-                if (VernierVisRow.recorded[name]) {
-                    VernierVisRow.recorded[name].Force.data.push(force);
-                    VernierVisRow.recorded[name].Force.timestamp.push(epoch_timestamp);
-                    if (br > 0) {
-                        VernierVisRow.recorded[name].BreathingRate.data.push(br);
-                        VernierVisRow.recorded[name].BreathingRate.timestamp.push(epoch_timestamp);
-                    }
-                }
+        if (this.is_recording) {
+            if (this.forceStreamer != undefined) {
+                this.forceStreamer.push({
+                    epoch_timestamp_ms: epoch_timestamp,
+                    Force_N: force,
+                });
+            }
+            if (this.brStreamer != undefined) {
+                this.brStreamer.push({
+                    epoch_timestamp_ms: epoch_timestamp,
+                    BR_bpm: br,
+                })
             }
         }
     }
@@ -474,10 +542,11 @@ export class VernierVisRow {
     }
 
     async disconnect() {
+        try { await this.stopRecording(); } catch (e) { console.error(e); }
         if (this.forceChart) this.forceChart.stop();
         if (this.brChart) this.brChart.stop();
 
-        if (this.parent.contains(this.sensorRowDiv)) {
+        if (this.sensorRowDiv && this.parent && this.parent.contains(this.sensorRowDiv)) {
             this.parent.removeChild(this.sensorRowDiv);
         }
         const index = VernierVisRow.vernierVisRows.indexOf(this);
@@ -493,16 +562,26 @@ export class VernierVisRow {
             }
         }
 
-        if (this.forceSensor && this.handleDataBound) {
-            this.forceSensor.removeListener('value-changed', this.handleDataBound);
-        }
+        try {
+            if (this.forceSensor && this.handleDataBound) {
+                if (typeof this.forceSensor.removeListener === 'function') {
+                    this.forceSensor.removeListener('value-changed', this.handleDataBound);
+                } else if (typeof this.forceSensor.off === 'function') {
+                    this.forceSensor.off('value-changed', this.handleDataBound);
+                } else if (typeof this.forceSensor.removeEventListener === 'function') {
+                    this.forceSensor.removeEventListener('value-changed', this.handleDataBound);
+                }
+            }
+        } catch (e) { console.error("Error removing Vernier listener", e); }
 
         // Only close device connection if no other rows are using it
         const duplicateInd = VernierVisRow.includesDuplicate(this, "device");
         if (duplicateInd < 0) {
             if (this.device) {
-                await this.device.stop();
-                this.device.close();
+                try {
+                    await this.device.stop();
+                    this.device.close();
+                } catch (e) { console.error("Error stopping Vernier device", e); }
             }
         }
 

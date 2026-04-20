@@ -29,6 +29,7 @@
   "dependencies": {
     "@spectre-org/spectre-css": "^1.2.0",
     "@vernier/godirect": "^1.8.3",
+    "apache-arrow": "^21.1.0",
     "coi-serviceworker": "^0.1.7",
     "esbuild": "^0.25.5",
     "fili": "^2.0.3",
@@ -37,6 +38,7 @@
   },
   "devDependencies": {
     "@types/web-bluetooth": "^0.0.21",
+    "@types/wicg-file-system-access": "^2023.10.7",
     "gh-pages": "^6.3.0"
   }
 }

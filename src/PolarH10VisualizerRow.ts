@@ -1,258 +1,90 @@
-import { SmoothieChart, TimeSeries } from "smoothie";
-
-import {
-  CustomSmoothie,
-  genSmoothieLegendInfo,
-  SmoothieTSInfo,
-} from "./CustomSmoothie";
-
+import { TimeSeries } from "smoothie";
+import { CustomSmoothie, genSmoothieLegendInfo, SmoothieTSInfo } from "./CustomSmoothie";
 import { CalcCascades, IirFilter } from "fili";
+import { PolarH10, PolarH10Data, HeartRateInfo } from "polar-h10";
+import { ArrowStreamer } from "./ArrowStreamer";
+import { Schema, Field, Float64 } from "apache-arrow";
+import {
+  updateSearchURL, resizeSmoothieGen, createSwitch, createSelect, createDiv, createNumInput,
+  createTextInput, createSpan, createCanvas, ECGIsOn, ACCIsOn, addTooltip,
+  createButtonIcon, prettyPrintFilter, compactPrettyPrintFilter,
+} from "./helpers";
 
 import {
-  PolarH10,
-  PolarSensorType,
-  PolarH10Data,
-  HeartRateInfo,
-} from "polar-h10";
-
-import {
-  SCROLL_MAX_LIMIT_FACTOR,
-  DEFAULT_ECG_LINE_CHART_OPTION,
-  DEFAULT_ACC_LINE_CHART_OPTION,
-  ECG_PRESENTATION_OPTIONS,
-  X_AXIS_PRESENTATION_OPTIONS,
-  Y_AXIS_PRESENTATION_OPTIONS,
-  Z_AXIS_PRESENTATION_OPTIONS,
-  X_LP_AXIS_PRESENTATION_OPTIONS,
-  Y_LP_AXIS_PRESENTATION_OPTIONS,
-  Z_LP_AXIS_PRESENTATION_OPTIONS,
-  X_FILTER_AXIS_PRESENTATION_OPTIONS,
-  Y_FILTER_AXIS_PRESENTATION_OPTIONS,
-  Z_FILTER_AXIS_PRESENTATION_OPTIONS,
-  MAG_FILTER_PRESENTATION_OPTIONS,
-  RHO_AXIS_PRESENTATION_OPTIONS,
-  PHI_AXIS_PRESENTATION_OPTIONS,
-  THETA_AXIS_PRESENTATION_OPTIONS,
-  ECG_FILTER_PRESENTATION_OPTIONS,
-  ECG_RMS_PRESENTATION_OPTIONS,
-  ECG_DELTA,
-  MAG_PRESENTATION_OPTIONS,
-  MAG_LP_PRESENTATION_OPTIONS,
-  ECG_RMS_WINDOW_MS,
-  ECG_RMS_WIN_MIN_MS,
-  ECG_RMS_WIN_MAX_MS,
-  ECG_RMS_WIN_STEP_MS,
-  ECG_RMS_WINDOW_SIZE,
-  ECG_STREAM_DELAY_MS,
-  ECG_RMS_MIN,
-  ECG_RMS_MAX,
-  ECG_FILTER_SCROLL_MIN,
-  ECG_RMS_SCROLL_MIN,
-  ACC_FILTER_MIN,
-  ACC_FILTER_MAX,
-  ACC_MAG_DELTA,
-  ECG_HIGHLOWPASS_CUTOFF_HZ,
-  ECG_BANDPASS_LOW_CUT_HZ,
-  ECG_BANDPASS_HIGH_CUT_HZ,
-  ECG_FILTER_ORDER,
-  AAC_LOWPASS_CUTOFF_HZ,
-  AAC_LOWPASS_ORDER,
-  AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
-  AAC_FILTER_BANDPASS_LOW_CUT_HZ,
-  AAC_FILTER_ORDER,
-  ACC_SCROLL_MIN,
-  ACC_MAG_SCROLL_MIN,
-  ECG_SAMPLE_RATE_HZ,
-  ACC_STREAM_DELAY_MS,
-  ACC_RANGE_G,
-  ACC_SAMPLE_RATE_HZ,
-  ACC_DELTA,
-  ECG_FILTER_MIN,
-  ECG_FILTER_MAX,
-  ACC_MIN,
-  ACC_MAX,
-  BODY_PARTS,
-  LOW_BATT_LVL,
-  FilterInfo,
-  DEFAULT_MILLIS_PER_PX,
-  ECG_STREAM_DELAY_MIN_MS,
-  ECG_STREAM_DELAY_MAX_MS,
-  ECG_STREAM_DELAY_STEP_MS,
-  ECG_MS_PER_PX_MIN,
-  ECG_MS_PER_PX_MAX,
-  ECG_MS_PER_PX_STEP,
-  ACC_STREAM_DELAY_MIN_MS,
-  ACC_STREAM_DELAY_MAX_MS,
-  ACC_STREAM_DELAY_STEP_MS,
-  ECG_BAND_LOW_MIN_HZ,
-  ECG_BAND_HIGH_MAX_HZ,
-  ECG_BAND_HIGH_STEP_HZ,
-  ACC_BAND_LOW_MIN_HZ,
-  ACC_BAND_HIGH_MAX_HZ,
-  ACC_BAND_HIGH_STEP_HZ,
-  ACC_MS_PER_PX_MIN,
-  ACC_MS_PER_PX_MAX,
-  ACC_MS_PER_PX_STEP,
-  ACC_RANGE_OPTIONS,
-  ACC_SAMPLE_RATE_OPTIONS,
-  FILTER_TYPES,
-  FILTER_CHARACTERISTICS,
-  HEART_INDEX,
-  ECG_HRV_RMSSD_WIN_MS,
-  ECG_HRV_RMSSD_WIN_MAX_MS,
+  initECGFilterSettings, initACCLowpassFilterSettings, initACCFilterSettings,
+  SCROLL_MAX_LIMIT_FACTOR, DEFAULT_ECG_LINE_CHART_OPTION, DEFAULT_ACC_LINE_CHART_OPTION,
+  ECG_PRESENTATION_OPTIONS, X_AXIS_PRESENTATION_OPTIONS, Y_AXIS_PRESENTATION_OPTIONS,
+  Z_AXIS_PRESENTATION_OPTIONS, X_LP_AXIS_PRESENTATION_OPTIONS, Y_LP_AXIS_PRESENTATION_OPTIONS,
+  Z_LP_AXIS_PRESENTATION_OPTIONS, X_FILTER_AXIS_PRESENTATION_OPTIONS, Y_FILTER_AXIS_PRESENTATION_OPTIONS,
+  Z_FILTER_AXIS_PRESENTATION_OPTIONS, MAG_FILTER_PRESENTATION_OPTIONS, RHO_AXIS_PRESENTATION_OPTIONS,
+  PHI_AXIS_PRESENTATION_OPTIONS, THETA_AXIS_PRESENTATION_OPTIONS, ECG_FILTER_PRESENTATION_OPTIONS,
+  ECG_RMS_PRESENTATION_OPTIONS, ECG_DELTA, MAG_PRESENTATION_OPTIONS, MAG_LP_PRESENTATION_OPTIONS,
+  ECG_RMS_WINDOW_MS, ECG_RMS_WIN_MIN_MS, ECG_RMS_WIN_MAX_MS, ECG_RMS_WIN_STEP_MS,
+  ECG_RMS_WINDOW_SIZE, ECG_STREAM_DELAY_MS, ECG_RMS_MIN, ECG_RMS_MAX, ECG_FILTER_SCROLL_MIN,
+  ECG_RMS_SCROLL_MIN, ACC_FILTER_MIN, ACC_FILTER_MAX, ACC_MAG_DELTA, ECG_HIGHLOWPASS_CUTOFF_HZ,
+  ECG_BANDPASS_LOW_CUT_HZ, ECG_BANDPASS_HIGH_CUT_HZ, AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
+  AAC_FILTER_BANDPASS_LOW_CUT_HZ, ACC_SCROLL_MIN, ACC_MAG_SCROLL_MIN, ECG_SAMPLE_RATE_HZ, ACC_STREAM_DELAY_MS,
+  ACC_RANGE_G, ACC_SAMPLE_RATE_HZ, ACC_DELTA, ECG_FILTER_MIN, ECG_FILTER_MAX, ACC_MIN, ACC_MAX,
+  BODY_PARTS, LOW_BATT_LVL, FilterInfo, DEFAULT_MILLIS_PER_PX, ECG_STREAM_DELAY_MIN_MS,
+  ECG_STREAM_DELAY_MAX_MS, ECG_STREAM_DELAY_STEP_MS, ECG_MS_PER_PX_MIN, ECG_MS_PER_PX_MAX,
+  ECG_MS_PER_PX_STEP, ACC_STREAM_DELAY_MIN_MS, ACC_STREAM_DELAY_MAX_MS, ACC_STREAM_DELAY_STEP_MS,
+  ECG_BAND_LOW_MIN_HZ, ECG_BAND_HIGH_MAX_HZ, ECG_BAND_HIGH_STEP_HZ, ACC_BAND_LOW_MIN_HZ,
+  ACC_BAND_HIGH_MAX_HZ, ACC_BAND_HIGH_STEP_HZ, ACC_MS_PER_PX_MIN, ACC_MS_PER_PX_MAX,
+  ACC_MS_PER_PX_STEP, ACC_RANGE_OPTIONS, ACC_SAMPLE_RATE_OPTIONS, FILTER_TYPES,
+  FILTER_CHARACTERISTICS, HEART_INDEX, ECG_HRV_RMSSD_WIN_MS, ECG_HRV_RMSSD_WIN_MAX_MS,
 } from "./consts";
 
 const url_config: object = {};
-
 type ConditionChecker = (row: PolarVisRow) => boolean;
-
 const IIRCalc = new CalcCascades();
 
-export async function createPolarVisRow(
-  content: HTMLElement,
-  device: BluetoothDevice,
-) {
+export async function createPolarVisRow(content: HTMLElement, device: BluetoothDevice) {
   const row = new PolarVisRow(content, device);
   await row.init();
 }
 
-export function startRecording() {
-  PolarVisRow.is_recording = true;
-  PolarVisRow.recorded = {};
-  const polarNameDict = {};
-  for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
-    const row = PolarVisRow.polarVisRows[row_i];
-    const polarName = row.getPolarName();
-
-    if (!(polarName in polarNameDict)) {
-      PolarVisRow.createNewRecordEntry(row);
-      polarNameDict[polarName] = "";
-      row.polarH10.addEventListener("ECG", row.recordECGData);
-      row.polarH10.addEventListener("ACC", row.recordACCData);
-    }
-  }
-}
-
-export function stopRecording() {
-  PolarVisRow.is_recording = false;
-  const polarNameDict = {};
-  for (let row_i = 0; row_i < PolarVisRow.polarVisRows.length; row_i++) {
-    const row = PolarVisRow.polarVisRows[row_i];
-    const polarName = row.getPolarName();
-    if (!(polarName in polarNameDict)) {
-      polarNameDict[polarName] = "";
-      row.polarH10.removeEventListener("ECG", row.recordECGData);
-      row.polarH10.removeEventListener("ACC", row.recordACCData);
-    }
-  }
-  updateRecordBtn();
-}
-
-function getCurrentTime() {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
-
-  return `${year}-${month}-${day}_${hours}-${minutes}-${seconds}`;
-}
-
-function updateRecordBtn() {
-  if (typeof (window as any).updateGlobalButtons === "function") {
-    (window as any).updateGlobalButtons();
-  } else {
-    if (!PolarVisRow.is_recording) {
-      const record_btn = document.getElementById(
-        "record_btn",
-      ) as HTMLButtonElement;
-      if (record_btn !== undefined && record_btn !== null) {
-        if (PolarVisRow.hasAnyActiveStream()) {
-          record_btn.disabled = false;
-        } else {
-          record_btn.disabled = true;
-        }
-      }
-    }
-  }
-}
-
-function updateDisconnectBtn() {
-  if (typeof (window as any).updateGlobalButtons === "function") {
-    (window as any).updateGlobalButtons();
-  } else {
-    const ble_disconnect_btn = document.getElementById(
-      "ble_disconnect_btn",
-    ) as HTMLButtonElement;
-    if (ble_disconnect_btn !== undefined && ble_disconnect_btn !== null) {
-      if (PolarVisRow.hasAnyActiveStream()) {
-        ble_disconnect_btn.disabled = false;
-      } else {
-        ble_disconnect_btn.disabled = true;
-      }
-    }
-  }
-}
-
-export function updateSearchURL(config: Object) {
-  const curr_url_search_string = window.location.search;
-  const url_params: URLSearchParams = new URLSearchParams(
-    curr_url_search_string,
-  );
-  for (const [key, val] of Object.entries(config)) {
-    url_params.set(key, val);
-  }
-  if (url_params.toString() !== curr_url_search_string) {
-    const new_url = `${window.location.protocol}//${window.location.host}${window.location.pathname}?${url_params.toString()}`;
-    window.history.pushState({ path: new_url }, "", new_url);
-  }
-}
-
+// PolarVisRow.polarRowID
 export class PolarVisRow {
   static polarRowID: number = 0;
   static polarVisRows: PolarVisRow[] = [];
-  static recorded: any = {};
-  static is_recording = false;
+
   device: BluetoothDevice;
-  polarH10: PolarH10;
+  polarH10!: PolarH10;
   deviceName: string;
   parent: HTMLElement;
-  polarSensorDiv: HTMLDivElement;
-  optionDiv: HTMLDivElement;
-  deviceInfoDiv: HTMLDivElement;
-  nameDiv: HTMLDivElement;
-  loadingDiv: HTMLDivElement;
-  disconnectDiv: HTMLDivElement;
-  deviceNameDiv: HTMLDivElement;
-  battLvlDiv: HTMLDivElement;
-  dataInfo: HTMLDivElement;
-  bodypartLabel: HTMLDivElement;
-  bodypartSelectDiv: HTMLDivElement;
-  bodypartSelect: HTMLSelectElement;
-  dataCtrl: HTMLDivElement;
-  extraDataCtrl: HTMLDivElement;
-  rowOrder: HTMLDivElement;
-  visContainerDiv: HTMLDivElement;
-  visConfigDiv: HTMLDivElement;
+  polarSensorDiv!: HTMLDivElement;
+  optionDiv!: HTMLDivElement;
+  deviceInfoDiv!: HTMLDivElement;
+  nameDiv!: HTMLDivElement;
+  loadingDiv!: HTMLDivElement;
+  disconnectDiv!: HTMLDivElement;
+  deviceNameDiv!: HTMLDivElement;
+  battLvlDiv!: HTMLDivElement;
+  dataInfo!: HTMLDivElement;
+  bodypartLabel!: HTMLDivElement;
+  bodypartSelectDiv!: HTMLDivElement;
+  bodypartSelect!: HTMLSelectElement;
+  dataCtrl!: HTMLDivElement;
+  extraDataCtrl!: HTMLDivElement;
+  rowOrder!: HTMLDivElement;
+  visContainerDiv!: HTMLDivElement;
+  visConfigDiv!: HTMLDivElement;
 
-  ECGConfigDiv: HTMLDivElement;
-  ECGChartConfigDiv: HTMLDivElement;
-  ECGFilterConfigDiv: HTMLDivElement;
-  ECGHeartConfigDiv: HTMLDivElement;
+  ECGConfigDiv!: HTMLDivElement;
+  ECGChartConfigDiv!: HTMLDivElement;
+  ECGFilterConfigDiv!: HTMLDivElement;
+  ECGHeartConfigDiv!: HTMLDivElement;
 
-  customBodyPartInput: HTMLInputElement;
+  customBodyPartInput!: HTMLInputElement;
 
-  ACCConfigDiv: HTMLDivElement;
-  ACCChartConfigDiv: HTMLDivElement;
-  ACCLPConfigDiv: HTMLDivElement;
-  // ACCRMSConfigDiv: HTMLDivElement;
-  ACCFilterConfigDiv: HTMLDivElement;
+  ACCConfigDiv!: HTMLDivElement;
+  ACCChartConfigDiv!: HTMLDivElement;
+  ACCLPConfigDiv!: HTMLDivElement;
+  ACCFilterConfigDiv!: HTMLDivElement;
 
-  ECGCtrlDiv: HTMLDivElement;
-  ACCCtrlDiv: HTMLDivElement;
-  order: number;
+  ECGCtrlDiv!: HTMLDivElement;
+  ACCCtrlDiv!: HTMLDivElement;
+  order!: number;
 
   ECG_FILTER_MIN: number = ECG_FILTER_MIN;
   ECG_FILTER_MAX: number = ECG_FILTER_MAX;
@@ -265,17 +97,17 @@ export class PolarVisRow {
 
   ECGHRVRMSSDWinMs: number = ECG_HRV_RMSSD_WIN_MS;
 
-  disBtn: HTMLButtonElement;
-  orderUpBtn: HTMLButtonElement;
-  orderDownBtn: HTMLButtonElement;
-  show3DBtn: HTMLButtonElement;
-  filterConfigBtn: HTMLButtonElement;
-  ECGFormSelect: HTMLSelectElement;
-  ECGSwitchInput: HTMLInputElement;
-  ECGDropDown: HTMLDivElement;
-  ACCFormSelect: HTMLSelectElement;
-  ACCSwitchInput: HTMLInputElement;
-  ACCDropDown: HTMLDivElement;
+  disBtn!: HTMLButtonElement;
+  orderUpBtn!: HTMLButtonElement;
+  orderDownBtn!: HTMLButtonElement;
+  show3DBtn!: HTMLButtonElement;
+  filterConfigBtn!: HTMLButtonElement;
+  ECGFormSelect!: HTMLSelectElement;
+  ECGSwitchInput!: HTMLInputElement;
+  ECGDropDown!: HTMLDivElement;
+  ACCFormSelect!: HTMLSelectElement;
+  ACCSwitchInput!: HTMLInputElement;
+  ACCDropDown!: HTMLDivElement;
 
   ECGDiv: HTMLElement | undefined = undefined;
   ACCDiv: HTMLElement | undefined = undefined;
@@ -295,7 +127,7 @@ export class PolarVisRow {
   ecg_filter_iir_coef = undefined;
   ecg_ts: TimeSeries | undefined = undefined;
 
-  ecg_filter_info: FilterInfo;
+  ecg_filter_info!: FilterInfo;
   ecg_filter_iir: IirFilter | undefined = undefined;
   ecg_filter_ts: TimeSeries | undefined = undefined;
   ecg_rms_ts: TimeSeries | undefined = undefined;
@@ -315,7 +147,7 @@ export class PolarVisRow {
   acc_z_ts: TimeSeries | undefined = undefined;
   acc_mag_ts: TimeSeries | undefined = undefined;
 
-  acc_lp_info: FilterInfo;
+  acc_lp_info!: FilterInfo;
   acc_lp_iir_coef = undefined;
   acc_x_lp_iir: IirFilter | undefined = undefined;
   acc_y_lp_iir: IirFilter | undefined = undefined;
@@ -334,7 +166,7 @@ export class PolarVisRow {
   rmssd_ts: TimeSeries | undefined = undefined;
   private readonly HEART_PLOT_MS_PER_PX = 50;
 
-  acc_filter_info: FilterInfo;
+  acc_filter_info!: FilterInfo;
   acc_filter_iir_coef = undefined;
   acc_x_filter_iir: IirFilter | undefined = undefined;
   acc_y_filter_iir: IirFilter | undefined = undefined;
@@ -385,13 +217,18 @@ export class PolarVisRow {
   heartbeat_bpm_info: SmoothieTSInfo | undefined = undefined;
   heart_rate_var_rms_info: SmoothieTSInfo | undefined = undefined;
 
-  // rr_ss: number = 0;
   rr_sum: number = 0;
-  // rr_s_list: number[] = [];
   rr_list: number[] = [];
   rr_ssd_list: number[] = [];
   rr_sssd: number = 0;
   rr_rmssd: number = 0;
+
+  is_recording: boolean = false;
+
+  // ARROW STREAMERS
+  ecgStreamer?: ArrowStreamer;
+  accStreamer?: ArrowStreamer;
+  hrStreamer?: ArrowStreamer;
 
   constructor(content: HTMLElement, device: BluetoothDevice) {
     if (device.name === undefined) {
@@ -405,56 +242,165 @@ export class PolarVisRow {
     this.showVisConfig = false;
   }
 
-  static createNewRecordEntry(row: PolarVisRow) {
-    const polarName = row.getPolarName();
-    if (!(polarName in PolarVisRow.recorded)) {
-      PolarVisRow.recorded[polarName] = {
-        ECG: {
-          data: [],
-          timestamp: [],
-        },
-        ACC: {
-          data_x: [],
-          data_y: [],
-          data_z: [],
-          timestamp: [],
-        },
-      };
+  async startRecording(dirHandle: FileSystemDirectoryHandle) {
+    const polarName = this.getPolarName();
+
+    if (this.ECGIsOn()) {
+      try {
+        const ecgFile = await dirHandle.getFileHandle(`${polarName}_ECG.arrow`, { create: true });
+        this.ecgStreamer = new ArrowStreamer(ecgFile, this.getEcgSchema());
+      } catch (error) {
+        this.ecgStreamer = undefined;
+      }
     }
+
+    if (this.ACCIsOn()) {
+      try {
+        const accFile = await dirHandle.getFileHandle(`${polarName}_ACC.arrow`, { create: true });
+        this.accStreamer = new ArrowStreamer(accFile, this.getAccSchema());
+      } catch (error) {
+        this.accStreamer = undefined;
+      }
+
+    }
+
+    if (this.bodypartSelect.selectedIndex === HEART_INDEX) {
+      try {
+        const hrFile = await dirHandle.getFileHandle(`${polarName}_HR.arrow`, { create: true });
+        this.hrStreamer = new ArrowStreamer(hrFile, this.getHRSchema());
+      } catch (error) {
+        this.hrStreamer = undefined;
+      }
+
+    }
+    this.is_recording = true
   }
 
-  static async stopAllPolarStream() {
-    for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
-      const row = PolarVisRow.polarVisRows[i];
-      if (row.ECGDiv !== undefined) {
-        await PolarVisRow.polarVisRows[i].stopECG();
-      }
-      if (row.ACCDiv !== undefined) {
-        await PolarVisRow.polarVisRows[i].stopAcc();
-      }
+  async stopRecording() {
+    if (this.ecgStreamer) {
+      await this.ecgStreamer.close();
+      this.ecgStreamer = undefined;
     }
+    if (this.accStreamer) {
+      await this.accStreamer.close();
+      this.accStreamer = undefined;
+    }
+    if (this.hrStreamer) {
+      await this.hrStreamer.close()
+      this.hrStreamer = undefined;
+    };
+    this.is_recording = false;
   }
 
   static async disconnectAllPolarH10() {
     for (let i = PolarVisRow.polarVisRows.length - 1; i > -1; i--) {
-      await PolarVisRow.polarVisRows[i].disconnectPolarH10();
+      try {
+        await PolarVisRow.polarVisRows[i].disconnectPolarH10();
+      } catch (e) { console.error(e); }
     }
   }
 
   static hasAnyActiveStream() {
-    let has_active_stream = false;
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
-      if (row.ECGDiv !== undefined) {
-        has_active_stream = true;
-        break;
-      }
-      if (row.ACCDiv !== undefined) {
-        has_active_stream = true;
-        break;
-      }
+      if (row.ECGDiv !== undefined || row.ACCDiv !== undefined) return true;
     }
-    return has_active_stream;
+    return false;
+  }
+
+  getHRMeta() {
+    return new Map([
+      ["sensor_name", this.getPolarName()],
+      ["device_name", this.deviceName],
+      ["modality", "RR_Interval"],
+      ["ECGHRVRMSSDWinMs", this.ECGHRVRMSSDWinMs.toString()],
+    ])
+  }
+
+  getHRSchema() {
+    return new Schema([
+      new Field("epoch_timestamp_ms", new Float64(), false),
+      new Field("hr_bpm", new Float64(), false),
+      new Field("hrv_rmssd_ms", new Float64(), false)
+    ], this.getHRMeta())
+  }
+
+  getEcgMeta() {
+    return new Map([
+      ["sensor_name", this.getPolarName()],
+      ["device_name", this.deviceName],
+      ["modality", "EXG"],
+      ["rms_win_size", this.ecg_rms_window_size.toString()],
+      ["filter_type", this.ecg_filter_info.type],
+      ["filter_order", this.ecg_filter_info.order.toString()],
+      ["filter_characteristic", this.ecg_filter_info.characteristic],
+      ["filter_Fs", this.ecg_filter_info.Fs ? this.ecg_filter_info.Fs.toString() : "undefined"],
+      ["filter_Fc", this.ecg_filter_info.Fc ? this.ecg_filter_info.Fc.toString() : "undefined"],
+      ["filter_Fl", this.ecg_filter_info.Fl ? this.ecg_filter_info.Fl.toString() : "undefined"],
+      ["filter_Fh", this.ecg_filter_info.Fh ? this.ecg_filter_info.Fh.toString() : "undefined"],
+      ["filter_BW", this.ecg_filter_info.BW ? this.ecg_filter_info.BW.toString() : "undefined"],
+      ["filter_gain", this.ecg_filter_info.gain ? this.ecg_filter_info.gain.toString() : "undefined"],
+      ["filter_preGain", this.ecg_filter_info.preGain ? this.ecg_filter_info.preGain.toString() : "undefined"],
+    ]);
+  }
+
+  getEcgSchema() {
+    return new Schema([
+      new Field("epoch_timestamp_ms", new Float64(), false),
+      new Field("raw", new Float64(), false),
+      new Field("filtered", new Float64(), false),
+      new Field("rms", new Float64(), false)
+    ], this.getEcgMeta());
+  }
+
+  getAccMeta() {
+    return new Map([
+      ["sensor_name", this.getPolarName()],
+      ["device_name", this.deviceName],
+      ["modality", "ACC"],
+      ["lp_filter_type", this.acc_lp_info.type],
+      ["lp_filter_order", this.acc_lp_info.order.toString()],
+      ["lp_filter_characteristic", this.acc_lp_info.characteristic],
+      ["lp_filter_Fs", this.acc_lp_info.Fs ? this.acc_lp_info.Fs.toString() : "undefined"],
+      ["lp_filter_Fc", this.acc_lp_info.Fc ? this.acc_lp_info.Fc.toString() : "undefined"],
+      ["lp_filter_Fl", this.acc_lp_info.Fl ? this.acc_lp_info.Fl.toString() : "undefined"],
+      ["lp_filter_Fh", this.acc_lp_info.Fh ? this.acc_lp_info.Fh.toString() : "undefined"],
+      ["lp_filter_BW", this.acc_lp_info.BW ? this.acc_lp_info.BW.toString() : "undefined"],
+      ["lp_filter_gain", this.acc_lp_info.gain ? this.acc_lp_info.gain.toString() : "undefined"],
+      ["lp_filter_preGain", this.acc_lp_info.preGain ? this.acc_lp_info.preGain.toString() : "undefined"],
+      ["filter_type", this.acc_filter_info.type],
+      ["filter_order", this.acc_filter_info.order.toString()],
+      ["filter_characteristic", this.acc_filter_info.characteristic],
+      ["filter_Fs", this.acc_filter_info.Fs ? this.acc_filter_info.Fs.toString() : "undefined"],
+      ["filter_Fc", this.acc_filter_info.Fc ? this.acc_filter_info.Fc.toString() : "undefined"],
+      ["filter_Fl", this.acc_filter_info.Fl ? this.acc_filter_info.Fl.toString() : "undefined"],
+      ["filter_Fh", this.acc_filter_info.Fh ? this.acc_filter_info.Fh.toString() : "undefined"],
+      ["filter_BW", this.acc_filter_info.BW ? this.acc_filter_info.BW.toString() : "undefined"],
+      ["filter_gain", this.acc_filter_info.gain ? this.acc_filter_info.gain.toString() : "undefined"],
+      ["filter_preGain", this.acc_filter_info.preGain ? this.acc_filter_info.preGain.toString() : "undefined"],
+
+    ])
+  }
+
+  getAccSchema() {
+    return new Schema([
+      new Field("epoch_timestamp_ms", new Float64(), false),
+      new Field("raw_acc_x", new Float64(), false),
+      new Field("raw_acc_y", new Float64(), false),
+      new Field("raw_acc_z", new Float64(), false),
+      new Field("raw_acc_mag", new Float64(), false),
+      new Field("rho", new Float64(), false),
+      new Field("phi", new Float64(), false),
+      new Field("theta", new Float64(), false),
+      new Field("lp_acc_x", new Float64(), false),
+      new Field("lp_acc_y", new Float64(), false),
+      new Field("lp_acc_z", new Float64(), false),
+      new Field("lp_acc_mag", new Float64(), false),
+      new Field("filtered_acc_x", new Float64(), false),
+      new Field("filtered_acc_y", new Float64(), false),
+      new Field("filtered_acc_z", new Float64(), false),
+      new Field("filtered_acc_mag", new Float64(), false),
+    ], this.getAccMeta())
   }
 
   getPolarName() {
@@ -478,7 +424,6 @@ export class PolarVisRow {
   }
 
   updateECGRMSWin() {
-    // this.ecg_rms
     this.ecg_mss_win_i = 0;
     this.ecg_buf_head = 0;
     this.ecg_mss = 0;
@@ -486,50 +431,17 @@ export class PolarVisRow {
   }
 
   initECGFilterSettings() {
-    this.ecg_filter_info = {
-      type: "highpass",
-      order: ECG_FILTER_ORDER,
-      characteristic: "butterworth",
-      Fs: ECG_SAMPLE_RATE_HZ,
-      Fc: ECG_HIGHLOWPASS_CUTOFF_HZ,
-      Fl: ECG_BANDPASS_LOW_CUT_HZ,
-      Fh: ECG_BANDPASS_HIGH_CUT_HZ,
-      BW: ECG_BANDPASS_HIGH_CUT_HZ - ECG_BANDPASS_LOW_CUT_HZ,
-      gain: undefined,
-      preGain: false,
-    };
+    this.ecg_filter_info = initECGFilterSettings;
   }
 
   initACCLowpassFilterSettings() {
-    this.acc_lp_info = {
-      type: "lowpass",
-      order: AAC_LOWPASS_ORDER,
-      characteristic: "butterworth",
-      Fs: this.acc_sample_rate_hz,
-      Fc: AAC_LOWPASS_CUTOFF_HZ,
-      Fl: 1,
-      Fh: 10,
-      BW: undefined,
-      gain: undefined,
-      preGain: false,
-    };
+    this.acc_lp_info = initACCLowpassFilterSettings;
+    this.acc_lp_info.Fs = this.acc_sample_rate_hz;
   }
 
   initACCFilterSettings() {
-    this.acc_filter_info = {
-      type: "bandpass",
-      order: AAC_FILTER_ORDER,
-      characteristic: "butterworth",
-      Fs: this.acc_sample_rate_hz,
-      Fc: Math.sqrt(
-        AAC_FILTER_BANDPASS_LOW_CUT_HZ * AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
-      ),
-      Fl: AAC_FILTER_BANDPASS_LOW_CUT_HZ,
-      Fh: AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
-      BW: AAC_FILTER_BANDPASS_HIGH_CUT_HZ - AAC_FILTER_BANDPASS_LOW_CUT_HZ,
-      gain: undefined,
-      preGain: false,
-    };
+    this.acc_filter_info = initACCFilterSettings;
+    this.acc_filter_info.Fs = this.acc_sample_rate_hz;
   }
 
   initFilterSettings() {
@@ -545,43 +457,10 @@ export class PolarVisRow {
     }
   }
 
-  recordECGData = (data: PolarH10Data) => {
-    if (data.samples !== undefined) {
-      const polarName = this.getPolarName();
-      for (let s_i = 0; s_i < data.samples.length; s_i++) {
-        const sample_i = (data.samples as Int32Array)[s_i];
-        PolarVisRow.recorded[polarName].ECG.data.push(sample_i);
-        if (data.epoch_timestamps_ms !== undefined) {
-          const timestamp = data.epoch_timestamps_ms[s_i];
-          PolarVisRow.recorded[polarName].ECG.timestamp.push(timestamp);
-        }
-      }
-    }
-  };
-
-  recordACCData = (data: PolarH10Data) => {
-    if (data.samples !== undefined) {
-      const polarName = this.getPolarName();
-      for (let s_i = 0; s_i < data.samples.length; s_i += 3) {
-        const frameNum = Math.floor(s_i / 3);
-
-        const y_d = -(data.samples as Int16Array)[s_i];
-        const x_d = -(data.samples as Int16Array)[s_i + 1];
-        const z_d = (data.samples as Int16Array)[s_i + 2];
-
-        PolarVisRow.recorded[polarName].ACC.data_x.push(x_d);
-        PolarVisRow.recorded[polarName].ACC.data_y.push(y_d);
-        PolarVisRow.recorded[polarName].ACC.data_z.push(z_d);
-        if (data.epoch_timestamps_ms !== undefined) {
-          const timestamp = data.epoch_timestamps_ms[frameNum];
-          PolarVisRow.recorded[polarName].ACC.timestamp.push(timestamp);
-        }
-      }
-    }
-  };
-
   disconnectPolarH10 = async (ev: any = undefined) => {
-    this.removeSelf();
+    try { await this.stopRecording(); } catch (e) { console.error(e); }
+    try { this.removeSelf(); } catch (e) { console.error(e); }
+
     if (this.ecg_chart !== undefined) {
       this.ecg_chart.stop();
     }
@@ -589,11 +468,11 @@ export class PolarVisRow {
       this.ecg_resize_observer.disconnect();
     }
     if (this.ECGDiv !== undefined) {
-      this.visContainerDiv?.removeChild(this.ECGDiv);
-      // this.ECGDiv.parentNode?.removeChild(this.ECGDiv);
-
-      this.polarH10.removeEventListener("ECG", this.newECGCallback);
-      await this.stopECG();
+      if (this.visContainerDiv && this.visContainerDiv.contains(this.ECGDiv)) {
+        this.visContainerDiv.removeChild(this.ECGDiv);
+      }
+      try { this.polarH10?.removeEventListener("ECG", this.newECGCallback); } catch (e) {}
+      try { await this.stopECG(); } catch (e) { console.error(e); }
     }
     this.resetECG();
 
@@ -604,14 +483,15 @@ export class PolarVisRow {
       this.acc_resize_observer.disconnect();
     }
     if (this.ACCDiv !== undefined) {
-      this.visContainerDiv?.removeChild(this.ACCDiv);
-      // this.ACCDiv.parentNode?.removeChild(this.ACCDiv);
-      this.polarH10.removeEventListener("ACC", this.newACCCallback);
-      await this.stopAcc();
+      if (this.visContainerDiv && this.visContainerDiv.contains(this.ACCDiv)) {
+        this.visContainerDiv.removeChild(this.ACCDiv);
+      }
+      try { this.polarH10?.removeEventListener("ACC", this.newACCCallback); } catch (e) {}
+      try { await this.stopAcc(); } catch (e) { console.error(e); }
     }
     this.resetACC();
 
-    this.disconnectPolarH10IfAlone();
+    try { this.disconnectPolarH10IfAlone(); } catch (e) { console.error(e); }
   };
 
   async init() {
@@ -655,7 +535,7 @@ export class PolarVisRow {
             });
           }
         }
-        this.polarH10.addBatteryLevelEventListener(this.updateBatteryInfo);
+        this.polarH10?.addBatteryLevelEventListener(this.updateBatteryInfo);
       }
     } catch (err) {
       console.log(err);
@@ -740,7 +620,7 @@ export class PolarVisRow {
         const filtered_sample_i = this.ecg_filter_iir.singleStep(sample_i);
         const filtered_sample_squared_n_i =
           (filtered_sample_i / this.ecg_rms_window_size) * filtered_sample_i;
-        let data_rms_i: number | undefined = undefined;
+        let data_rms_i: number = NaN;
         if (this.ecg_mss_win !== undefined) {
           this.ecg_mss += filtered_sample_squared_n_i;
           if (this.ecg_mss_win_i < this.ecg_rms_window_size) {
@@ -755,6 +635,9 @@ export class PolarVisRow {
           if (this.ecg_mss_win_i === this.ecg_rms_window_size) {
             data_rms_i = Math.sqrt(this.ecg_mss);
           }
+        }
+        if (this.is_recording && this.ecgStreamer !== undefined) {
+          this.ecgStreamer.push({ epoch_timestamp_ms: timestamp, raw: sample_i, filtered: filtered_sample_i, rms: data_rms_i });
         }
         setTimeout(() => {
           this.ecg_ts?.append(timestamp, sample_i);
@@ -824,6 +707,26 @@ export class PolarVisRow {
         const y_filter_d = this.acc_y_filter_iir.singleStep(y_d);
         const z_filter_d = this.acc_z_filter_iir.singleStep(z_d);
         const mag_filter_d = this.acc_mag_filter_iir.singleStep(acc_mag);
+        if (this.is_recording && this.accStreamer !== undefined) {
+          this.accStreamer.push({
+            epoch_timestamp_ms: timestamp,
+            raw_acc_x: x_d,
+            raw_acc_y: y_d,
+            raw_acc_z: z_d,
+            raw_acc_mag: acc_mag,
+            rho: rho,
+            phi: phi,
+            theta: theta,
+            lp_acc_x: x_lp_d,
+            lp_acc_y: y_lp_d,
+            lp_acc_z: z_lp_d,
+            lp_acc_mag: mag_lp_d,
+            filtered_acc_x: x_filter_d,
+            filtered_acc_y: y_filter_d,
+            filtered_acc_z: z_filter_d,
+            filtered_acc_mag: mag_filter_d,
+          });
+        }
         setTimeout(() => {
           this.acc_x_ts?.append(timestamp, x_d);
           this.acc_y_ts?.append(timestamp, y_d);
@@ -1309,9 +1212,12 @@ export class PolarVisRow {
         width_class = "half-width";
         this.ACCDiv.classList.remove("full-width");
         this.ACCDiv.classList.add("half-width");
-        this.visContainerDiv.removeChild(this.ACCDiv);
+        if (this.visContainerDiv.contains(this.ACCDiv)) {
+          this.visContainerDiv.removeChild(this.ACCDiv);
+        }
       }
-      this.ECGDiv = createDiv("ECGDiv", this.visContainerDiv, [
+      this.ECGDiv = createDiv("ECGDiv", PolarVisRow.polarRowID,
+        this.visContainerDiv, [
         "float-left",
         "almost-full-height",
         width_class,
@@ -1320,7 +1226,7 @@ export class PolarVisRow {
       if (this.ACCDiv !== undefined) {
         this.visContainerDiv.appendChild(this.ACCDiv);
       }
-      this.ecg_canvas = createCanvas("ecg_canvas", this.ECGDiv);
+      this.ecg_canvas = createCanvas("ecg_canvas", PolarVisRow.polarRowID, this.ECGDiv);
 
       this.ecg_chart = new CustomSmoothie(DEFAULT_ECG_LINE_CHART_OPTION);
       this.ecg_chart.options.millisPerPixel = this.ecg_millis_per_px;
@@ -1371,10 +1277,12 @@ export class PolarVisRow {
         if (this.ECGDiv.contains(this.ecg_canvas)) {
           this.ACCDiv?.classList.remove("half-width");
           this.ACCDiv?.classList.add("full-width");
-          await this.stopECG();
-          this.visContainerDiv.removeChild(this.ECGDiv);
+          try { await this.stopECG(); } catch (e) { console.error(e); }
+          if (this.visContainerDiv && this.visContainerDiv.contains(this.ECGDiv)) {
+            this.visContainerDiv.removeChild(this.ECGDiv);
+          }
           this.ecg_resize_observer?.disconnect();
-          this.polarH10.removeEventListener("ECG", this.newECGCallback);
+          try { this.polarH10?.removeEventListener("ECG", this.newECGCallback); } catch (e) {}
           this.resetECG();
         }
       }
@@ -1383,8 +1291,7 @@ export class PolarVisRow {
       this.ACCSwitchInput.disabled = false;
     }
     this.enableAllOtherSameSwitch();
-    updateDisconnectBtn();
-    updateRecordBtn();
+    if (typeof (window as any).updateGlobalButtons === "function") (window as any).updateGlobalButtons();
   };
 
   onToggleACC = async (ev: any) => {
@@ -1403,7 +1310,7 @@ export class PolarVisRow {
         this.ECGDiv.classList.remove("full-width");
         this.ECGDiv.classList.add("half-width");
       }
-      this.ACCDiv = createDiv("ACCDiv", this.visContainerDiv, [
+      this.ACCDiv = createDiv("ACCDiv", PolarVisRow.polarRowID, this.visContainerDiv, [
         "float-left",
         "almost-full-height",
         width_class,
@@ -1411,7 +1318,7 @@ export class PolarVisRow {
 
       this.ACCDiv.addEventListener("wheel", this.onWheelACC);
 
-      this.acc_canvas = createCanvas("acc_canvas", this.ACCDiv);
+      this.acc_canvas = createCanvas("acc_canvas", PolarVisRow.polarRowID, this.ACCDiv);
 
       this.acc_chart = new CustomSmoothie(DEFAULT_ACC_LINE_CHART_OPTION);
       this.acc_chart.options.millisPerPixel = this.acc_millis_per_px;
@@ -1489,11 +1396,13 @@ export class PolarVisRow {
         }
         this.ECGDiv?.classList.remove("half-width");
         this.ECGDiv?.classList.add("full-width");
-        this.polarH10.removeEventListener("ACC", this.newACCCallback);
-        this.visContainerDiv.removeChild(this.ACCDiv);
-        this.acc_resize_observer?.disconnect();
-        await this.stopAcc();
 
+        try { this.polarH10?.removeEventListener("ACC", this.newACCCallback); } catch (e) {}
+        if (this.visContainerDiv && this.visContainerDiv.contains(this.ACCDiv)) {
+          this.visContainerDiv.removeChild(this.ACCDiv);
+        }
+        this.acc_resize_observer?.disconnect();
+        try { await this.stopAcc(); } catch (e) { console.error(e); }
         this.resetACC();
       }
     }
@@ -1501,12 +1410,11 @@ export class PolarVisRow {
       this.ECGSwitchInput.disabled = false;
     }
     this.enableAllOtherSameSwitch();
-    updateDisconnectBtn();
-    updateRecordBtn();
+    if (typeof (window as any).updateGlobalButtons === "function") (window as any).updateGlobalButtons();
   };
 
   private removeSelf() {
-    if (this.parent.contains(this.polarSensorDiv)) {
+    if (this.polarSensorDiv && this.parent.contains(this.polarSensorDiv)) {
       this.parent.removeChild(this.polarSensorDiv);
     }
     const myInd = PolarVisRow.polarVisRows.indexOf(this);
@@ -1522,6 +1430,7 @@ export class PolarVisRow {
       }
     }
   }
+
   private static reOrderRows() {
     for (let i = 0; i < PolarVisRow.polarVisRows.length; i++) {
       const row = PolarVisRow.polarVisRows[i];
@@ -1531,11 +1440,11 @@ export class PolarVisRow {
   }
 
   private async initPolarH10() {
-    this.polarSensorDiv = createDiv(`polarSensorDiv`, this.parent, [
+    this.polarSensorDiv = createDiv(`polarSensorDiv`, PolarVisRow.polarRowID, this.parent, [
       "polar-sensor-row",
       "flexbox",
     ]);
-    this.optionDiv = createDiv(`optionDiv`, this.polarSensorDiv, [
+    this.optionDiv = createDiv(`optionDiv`, PolarVisRow.polarRowID, this.polarSensorDiv, [
       "polar-sensor-left-panel",
       "center",
     ]);
@@ -1544,11 +1453,12 @@ export class PolarVisRow {
 
     this.nameDiv = createDiv(
       `device-name-batt`,
+      PolarVisRow.polarRowID,
       this.optionDiv,
       ["center", "flexbox"],
-      `Conneting ${this.deviceName}...`,
+      `Connecting ${this.deviceName}...`,
     );
-    this.loadingDiv = createDiv("ConnectLoading", this.optionDiv, [
+    this.loadingDiv = createDiv("ConnectLoading", PolarVisRow.polarRowID, this.optionDiv, [
       "loading",
       "loading-lg",
       "full-width",
@@ -1587,9 +1497,7 @@ export class PolarVisRow {
   disconnectPolarH10IfAlone() {
     if (PolarVisRow.includesDuplicate(this, "device") === -1) {
       this.device.gatt?.disconnect();
-      // if (PolarH10Row)
-      updateRecordBtn();
-      updateDisconnectBtn();
+      if (typeof (window as any).updateGlobalButtons === "function") (window as any).updateGlobalButtons();
     }
   }
 
@@ -1599,9 +1507,6 @@ export class PolarVisRow {
       try {
         this.polarH10 = new PolarH10(this.device);
         await this.polarH10.init();
-        const acc_settings = await this.polarH10.getSensorSettingsFromId(
-          PolarSensorType.ACC,
-        );
       } catch (err) {
         console.log(err);
         throw new Error("polarH10 device initialization failed!");
@@ -1625,7 +1530,6 @@ export class PolarVisRow {
     this.ecg_filter_iir = undefined;
     this.ecg_mss_win_i = 0;
     this.ecg_mss = 0;
-    // this.configureECGGraph = undefined;
   }
 
   resetACC() {
@@ -1650,7 +1554,6 @@ export class PolarVisRow {
     this.acc_phi_ts = undefined;
     this.acc_theta_ts = undefined;
     this.acc_mag_ts = undefined;
-    // this.configureACCGraph = undefined;
   }
 
   onBodypartSelect = (ev: any) => {
@@ -1709,7 +1612,7 @@ export class PolarVisRow {
               "bold 20px 'Roboto Mono'",
               "#4ffbfb",
             );
-            row.polarH10.addHeartRateEventListener(row.updateHRLabel);
+            row.polarH10?.addHeartRateEventListener(row.updateHRLabel);
             row.addHeartInfo();
           }
           row.generateECGFormSelect(
@@ -1721,13 +1624,10 @@ export class PolarVisRow {
             row.ECGFormSelect.selectedIndex = 0;
             row.changeECGGraph({ target: { selectedIndex: 0 } });
           }
-          row.polarH10.removeHeartRateEventListener(row.updateHRLabel);
+          row.polarH10?.removeHeartRateEventListener(row.updateHRLabel);
           row.removeheartInfo();
           row.generateECGFormSelect(0, row.ECGFormSelect.disabled);
         }
-      }
-      if (PolarVisRow.is_recording) {
-        PolarVisRow.createNewRecordEntry(row);
       }
     }
     if (url_need_update) {
@@ -1759,13 +1659,25 @@ export class PolarVisRow {
         }
       }
     }
-    this.rr_rmssd = Math.sqrt(this.rr_sssd / this.rr_ssd_list.length);
-    if (this.rr_rmssd > 0 && !Number.isNaN(this.rr_rmssd)) {
-      const new_hrv_text = `HRV${valid_and_updated ? "" : "*"}:${this.rr_rmssd.toFixed(2).padStart(5, " ")}(ms)`;
-      if (this.heart_rate_var_rms_info !== undefined) {
-        this.heart_rate_var_rms_info.text = new_hrv_text;
+    if (valid_and_updated) {
+      this.rr_rmssd = Math.sqrt(this.rr_sssd / this.rr_ssd_list.length);
+      if (this.rr_rmssd > 0 && !Number.isNaN(this.rr_rmssd)) {
+        const new_hrv_text = `HRV${valid_and_updated ? "" : "*"}:${this.rr_rmssd.toFixed(2).padStart(5, " ")}(ms)`;
+        if (this.heart_rate_var_rms_info !== undefined) {
+          this.heart_rate_var_rms_info.text = new_hrv_text;
+        }
+        this.rmssd_ts?.append(hr_info.recv_epoch_time_ms, this.rr_rmssd);
       }
-      this.rmssd_ts?.append(hr_info.recv_epoch_time_ms, this.rr_rmssd);
+    } else {
+      this.rr_rmssd = NaN;
+    }
+
+    if (this.is_recording && this.hrStreamer !== undefined) {
+      this.hrStreamer.push({
+        epoch_timestamp_ms: hr_info.recv_epoch_time_ms,
+        hr_bpm: hr_info.heart_rate_bpm,
+        hrv_rmssd_ms: this.rr_rmssd
+      });
     }
   };
 
@@ -1851,17 +1763,18 @@ export class PolarVisRow {
   };
 
   private async initDeviceInfo() {
-    this.deviceInfoDiv = createDiv("deviceInfoDiv", this.optionDiv, [
+    this.deviceInfoDiv = createDiv("deviceInfoDiv", PolarVisRow.polarRowID, this.optionDiv, [
       "device-info",
     ]);
 
-    this.disconnectDiv = createDiv("disconnectDiv", undefined, [
+    this.disconnectDiv = createDiv("disconnectDiv", PolarVisRow.polarRowID, undefined, [
       "flexbox",
       "disconnect",
     ]);
 
     this.disBtn = createButtonIcon(
       "delete",
+      PolarVisRow.polarRowID,
       "distBtn",
       this.disconnectDiv,
       false,
@@ -1880,6 +1793,7 @@ export class PolarVisRow {
     this.nameDiv.classList.add("flex");
     this.deviceNameDiv = createDiv(
       "devicename",
+      PolarVisRow.polarRowID,
       this.nameDiv,
       ["flexbox"],
       this.deviceName,
@@ -1893,6 +1807,7 @@ export class PolarVisRow {
     }
     this.battLvlDiv = createDiv(
       "battLvl",
+      PolarVisRow.polarRowID,
       this.nameDiv,
       ["flexbox", "small-mid-text"],
       battStr,
@@ -1902,15 +1817,16 @@ export class PolarVisRow {
     this.deviceInfoDiv.appendChild(this.nameDiv);
     this.optionDiv.appendChild(this.deviceInfoDiv);
 
-    this.dataInfo = createDiv("dataInfo", this.deviceInfoDiv, ["data-info"]);
+    this.dataInfo = createDiv("dataInfo", PolarVisRow.polarRowID, this.deviceInfoDiv, ["data-info"]);
 
-    this.extraDataCtrl = createDiv("extraDataCtrl", this.optionDiv, [
+    this.extraDataCtrl = createDiv("extraDataCtrl", PolarVisRow.polarRowID, this.optionDiv, [
       "extra-data-ctrl",
       "center",
     ]);
 
     this.filterConfigBtn = createButtonIcon(
       "settings",
+      PolarVisRow.polarRowID,
       "filterConfigBtn",
       this.extraDataCtrl,
       true,
@@ -1924,6 +1840,7 @@ export class PolarVisRow {
 
     this.show3DBtn = createButtonIcon(
       "view_in_ar",
+      PolarVisRow.polarRowID,
       "show3DBtn",
       this.extraDataCtrl,
       true,
@@ -1933,10 +1850,11 @@ export class PolarVisRow {
     this.show3DBtn.disabled = true;
     addTooltip(this.show3DBtn, "3D Tilt, work-in-progress", "left");
 
-    this.rowOrder = createDiv("rowOrder", this.optionDiv, ["row-order"]);
+    this.rowOrder = createDiv("rowOrder", PolarVisRow.polarRowID, this.optionDiv, ["row-order"]);
 
     this.orderUpBtn = createButtonIcon(
       "arrow-up",
+      PolarVisRow.polarRowID,
       "orderUpBtn",
       this.rowOrder,
       false,
@@ -1946,10 +1864,10 @@ export class PolarVisRow {
     addTooltip(this.orderUpBtn, "Move up", "right");
 
     this.orderUpBtn.disabled = PolarVisRow.polarVisRows.length < 1;
-    addTooltip(this.orderUpBtn, "Move up", "right");
 
     this.orderDownBtn = createButtonIcon(
       "arrow-down",
+      PolarVisRow.polarRowID,
       "orderDownBtn",
       this.rowOrder,
       false,
@@ -1968,40 +1886,42 @@ export class PolarVisRow {
 
     this.bodypartLabel = createDiv(
       "bodypartLabel",
+      PolarVisRow.polarRowID,
       this.dataInfo,
       ["bodypart-text"],
       "Bodypart:",
     );
 
-    this.bodypartSelectDiv = createDiv("bodypartSelectDiv", this.dataInfo, [
+    this.bodypartSelectDiv = createDiv("bodypartSelectDiv", PolarVisRow.polarRowID, this.dataInfo, [
       "bodypart-select",
     ]);
 
     this.bodypartSelect = createSelect(
       "bodypartSelect",
+      PolarVisRow.polarRowID,
       this.bodypartSelectDiv,
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
       BODY_PARTS,
       undefined,
-      getPolarRowId,
     );
     this.bodypartSelect.addEventListener("change", this.onBodypartSelect);
 
     this.customBodyPartSpan = createSpan(
       "customBodyPartSpan",
+      PolarVisRow.polarRowID,
       this.bodypartSelectDiv,
       ["hide", "hide-overflow"],
       this.customBodyPart,
     );
 
-    this.dataCtrl = createDiv("dataCtrl", this.optionDiv, ["data-ctrl"]);
+    this.dataCtrl = createDiv("dataCtrl", PolarVisRow.polarRowID, this.optionDiv, ["data-ctrl"]);
 
-    this.visContainerDiv = createDiv("visContainer", this.polarSensorDiv, [
+    this.visContainerDiv = createDiv("visContainer", PolarVisRow.polarRowID, this.polarSensorDiv, [
       "visContainer",
     ]);
 
-    this.visConfigDiv = createDiv("visConfigDiv", this.polarSensorDiv, [
+    this.visConfigDiv = createDiv("visConfigDiv", PolarVisRow.polarRowID, this.polarSensorDiv, [
       "visContainer",
     ]);
 
@@ -2513,7 +2433,7 @@ export class PolarVisRow {
   }
 
   private initVisConfigDiv() {
-    this.ECGConfigDiv = createDiv("ECGConfigDiv", this.visConfigDiv, [
+    this.ECGConfigDiv = createDiv("ECGConfigDiv", PolarVisRow.polarRowID, this.visConfigDiv, [
       "float-left",
       "almost-full-height",
       "config-div",
@@ -2522,13 +2442,14 @@ export class PolarVisRow {
       "flex-col",
     ]);
 
-    const ECGTitleRow = createDiv("ECGChartConfigTitleRow", this.ECGConfigDiv, [
+    const ECGTitleRow = createDiv("ECGChartConfigTitleRow", PolarVisRow.polarRowID, this.ECGConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     createDiv(
       "ECGChartConfigTitle",
+      PolarVisRow.polarRowID,
       ECGTitleRow,
       ["fourty-width", "center", "bold-text"],
       "EXG Visualization",
@@ -2536,12 +2457,14 @@ export class PolarVisRow {
 
     const customBodypartInputDiv = createDiv(
       "customBodypartInputDiv",
+      PolarVisRow.polarRowID,
       ECGTitleRow,
       ["sixty-width", "flexbox"],
     );
 
     const customBodypartSpan = createSpan(
       "customBodypartSpan",
+      PolarVisRow.polarRowID,
       customBodypartInputDiv,
       ["padright-5px", "padleft-5px"],
       "Custom Bodypart:",
@@ -2549,24 +2472,27 @@ export class PolarVisRow {
 
     this.customBodyPartInput = createTextInput(
       "customBodyPartInput",
+      PolarVisRow.polarRowID,
       customBodypartInputDiv,
       ["dark-input", "custom-bodypart-input-width"],
     );
     this.customBodyPartInput.addEventListener("input", this.onCustomBodyPart);
 
-    this.ECGChartConfigDiv = createDiv("ECGChartConfigDiv", this.ECGConfigDiv, [
+    this.ECGChartConfigDiv = createDiv("ECGChartConfigDiv", PolarVisRow.polarRowID, this.ECGConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     const ECGstreamDelayDiv = createDiv(
       "ECGChartStreamDelay",
+      PolarVisRow.polarRowID,
       this.ECGChartConfigDiv,
       ["full-width", "flexbox"],
     );
 
     createSpan(
       "ECGStreamDelayLabel",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["padleft-5px", "padright-5px"],
       "Delay (ms):",
@@ -2574,6 +2500,7 @@ export class PolarVisRow {
 
     this.ECGStreamDelayInput = createNumInput(
       "ECGStreamDelayInput",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["marginright-5px", "dark-input", "input-width-4_5"],
       ECG_STREAM_DELAY_MIN_MS,
@@ -2588,6 +2515,7 @@ export class PolarVisRow {
 
     createSpan(
       "ECGStreamDataWidthLabel",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["padright-5px"],
       "Data width (ms/px):",
@@ -2595,6 +2523,7 @@ export class PolarVisRow {
 
     this.ECGstreamMPPInput = createNumInput(
       "ECGStreamMPPInput",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["marginright-5px", "dark-input", "input-width-3_5"],
       ECG_MS_PER_PX_MIN,
@@ -2606,6 +2535,7 @@ export class PolarVisRow {
 
     createSpan(
       "ECGSRMSLabel",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["padright-5px"],
       "RMS window (ms): ",
@@ -2613,6 +2543,7 @@ export class PolarVisRow {
 
     this.ECGRMSWinInput = createNumInput(
       "ECGRMSWinInput",
+      PolarVisRow.polarRowID,
       ECGstreamDelayDiv,
       ["marginright-5px", "dark-input", "input-width-4_5"],
       ECG_RMS_WIN_MIN_MS,
@@ -2624,18 +2555,21 @@ export class PolarVisRow {
 
     this.ECGFilterConfigDiv = createDiv(
       "ECGFilterConfigDiv",
+      PolarVisRow.polarRowID,
       this.ECGConfigDiv,
       ["full-width", "flexbox"],
     );
 
     createSpan(
       "ECGFilterTypeSpan",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Filter Type:",
     );
     this.ECGFilterTypesSelect = createSelect(
       "ECGFilterTypesSelect",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["form-select", "dark-input", "select-sm", "filter-type-width"],
       "",
@@ -2646,12 +2580,14 @@ export class PolarVisRow {
 
     createSpan(
       "ECGFilterCharSpan",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Char:",
     );
     this.ECGFilteCharSelect = createSelect(
       "ECGFilteCharSelect",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["form-select", "dark-input", "select-sm", "filter-char-width"],
       "",
@@ -2662,6 +2598,7 @@ export class PolarVisRow {
 
     createSpan(
       "ECGFilterOrderSpan",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Order:",
@@ -2669,6 +2606,7 @@ export class PolarVisRow {
 
     this.ECGFilterOrderInput = createNumInput(
       "ECGFilterOrderInput",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["dark-input", "input-width-3_5"],
       1,
@@ -2680,6 +2618,7 @@ export class PolarVisRow {
 
     createSpan(
       "ECGFilterCutoffSpan",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Cutoff (Hz):",
@@ -2687,6 +2626,7 @@ export class PolarVisRow {
 
     this.ECGFilterCutoffInput = createNumInput(
       "ECGFilterCutoffInput",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["dark-input", "freq-input-width"],
       ECG_BAND_LOW_MIN_HZ,
@@ -2701,6 +2641,7 @@ export class PolarVisRow {
 
     this.ECGFilterLowCutInput = createNumInput(
       "ECGFilterLowCutInput",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["margin-left-5", "dark-input", "freq-input-width", "hide"],
       ECG_BAND_LOW_MIN_HZ,
@@ -2715,6 +2656,7 @@ export class PolarVisRow {
 
     this.ECGFilterHighCutInput = createNumInput(
       "ECGFilterHighCutInput",
+      PolarVisRow.polarRowID,
       this.ECGFilterConfigDiv,
       ["margin-left-5", "dark-input", "freq-input-width", "hide"],
       this.ecg_filter_info.Fl,
@@ -2733,13 +2675,14 @@ export class PolarVisRow {
       this.ECGFilterHighCutInput.classList.remove("hide");
     }
 
-    this.ECGHeartConfigDiv = createDiv("ECGHeartConfigDiv", this.ECGConfigDiv, [
+    this.ECGHeartConfigDiv = createDiv("ECGHeartConfigDiv", PolarVisRow.polarRowID, this.ECGConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     createSpan(
       "ECGRMSSDWinMsSpan",
+      PolarVisRow.polarRowID,
       this.ECGHeartConfigDiv,
       ["padleft-5px", "padright-5px"],
       "RMSSD window size for Heart (s): ",
@@ -2747,6 +2690,7 @@ export class PolarVisRow {
 
     this.ECGRMSSDWinMsInput = createNumInput(
       "ECGRMSSDWinMsInput",
+      PolarVisRow.polarRowID,
       this.ECGHeartConfigDiv,
       ["dark-input", "freq-input-width"],
       this.ECGHRVRMSSDWinMs / 1e3,
@@ -2761,7 +2705,7 @@ export class PolarVisRow {
       this.onECGFilterCutoff,
     );
 
-    this.ACCConfigDiv = createDiv("ACCConfigDiv", this.visConfigDiv, [
+    this.ACCConfigDiv = createDiv("ACCConfigDiv", PolarVisRow.polarRowID, this.visConfigDiv, [
       "float-left",
       "almost-full-height",
       "config-div",
@@ -2770,23 +2714,25 @@ export class PolarVisRow {
       "flex-col",
     ]);
 
-    const ACCTitleRow = createDiv("ECGChartConfigTitleRow", this.ACCConfigDiv, [
+    const ACCTitleRow = createDiv("ECGChartConfigTitleRow", PolarVisRow.polarRowID, this.ACCConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     createDiv(
       "ACCChartConfigTitle",
+      PolarVisRow.polarRowID,
       ACCTitleRow,
       ["fourty-width", "center", "bold-text"],
       "Accelerometer Visualization",
     );
 
-    const ACCSampleRateRange = createDiv("ACCSampleRateRange", ACCTitleRow, [
+    const ACCSampleRateRange = createDiv("ACCSampleRateRange", PolarVisRow.polarRowID, ACCTitleRow, [
       "sixty-width",
     ]);
     const ACCSampleRateSpan = createSpan(
       "ACCSampleRateSpan",
+      PolarVisRow.polarRowID,
       ACCSampleRateRange,
       ["padright-5px", "padleft-5px"],
       "Fs (Hz):",
@@ -2794,6 +2740,7 @@ export class PolarVisRow {
 
     this.ACCSampleRateSelect = createSelect(
       "ACCSampleRateSelect",
+      PolarVisRow.polarRowID,
       ACCSampleRateRange,
       ["form-select", "dark-input", "select-sm", "input-width-4_5"],
       "",
@@ -2807,6 +2754,7 @@ export class PolarVisRow {
 
     const ACCRangeSpan = createSpan(
       "ACCRangeSpan",
+      PolarVisRow.polarRowID,
       ACCSampleRateRange,
       ["padright-5px", "padleft-5px"],
       "Range (±G):",
@@ -2814,6 +2762,7 @@ export class PolarVisRow {
 
     this.ACCRangeSelect = createSelect(
       "ACCRangeSelect",
+      PolarVisRow.polarRowID,
       ACCSampleRateRange,
       ["form-select", "dark-input", "select-sm", "input-width-3_5"],
       "",
@@ -2823,19 +2772,21 @@ export class PolarVisRow {
 
     this.ACCRangeSelect.addEventListener("change", this.onACCRangeSelect);
 
-    this.ACCChartConfigDiv = createDiv("ACCChartConfigDiv", this.ACCConfigDiv, [
+    this.ACCChartConfigDiv = createDiv("ACCChartConfigDiv", PolarVisRow.polarRowID, this.ACCConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     const ACCDisplaySettingsDiv = createDiv(
       "ACCDisplaySettingsDiv",
+      PolarVisRow.polarRowID,
       this.ACCChartConfigDiv,
       ["full-width", "flexbox"],
     );
 
     createSpan(
       "ACCStreamDelayLabel",
+      PolarVisRow.polarRowID,
       ACCDisplaySettingsDiv,
       ["padleft-5px", "padright-5px"],
       "Delay (ms):",
@@ -2843,6 +2794,7 @@ export class PolarVisRow {
 
     this.ACCStreamDelayInput = createNumInput(
       "ACCStreamDelayInput",
+      PolarVisRow.polarRowID,
       ACCDisplaySettingsDiv,
       ["marginright-5px", "dark-input", "input-width-4_5"],
       ACC_STREAM_DELAY_MIN_MS,
@@ -2857,6 +2809,7 @@ export class PolarVisRow {
 
     createSpan(
       "ACCStreamDataWidthLabel",
+      PolarVisRow.polarRowID,
       ACCDisplaySettingsDiv,
       ["padright-5px"],
       "Data width (ms/px):",
@@ -2864,6 +2817,7 @@ export class PolarVisRow {
 
     this.ACCstreamMPPInput = createNumInput(
       "ACCSteamMPPInput",
+      PolarVisRow.polarRowID,
       ACCDisplaySettingsDiv,
       ["marginright-5px", "dark-input", "input-width-3_5"],
       ACC_MS_PER_PX_MIN,
@@ -2873,13 +2827,14 @@ export class PolarVisRow {
     this.ACCstreamMPPInput.value = this.acc_millis_per_px.toString();
     this.ACCstreamMPPInput.addEventListener("change", this.onACCMPPChange);
 
-    this.ACCLPConfigDiv = createDiv("ACCLPConfigDiv", this.ACCConfigDiv, [
+    this.ACCLPConfigDiv = createDiv("ACCLPConfigDiv", PolarVisRow.polarRowID, this.ACCConfigDiv, [
       "full-width",
       "flexbox",
     ]);
 
     createSpan(
       "ACCLPCharSpan",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Lowpass filter characteristic:",
@@ -2887,6 +2842,7 @@ export class PolarVisRow {
 
     this.ACCLPCharSelect = createSelect(
       "ACCLPCharSelect",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["form-select", "dark-input", "select-sm", "filter-char-width"],
       "",
@@ -2897,6 +2853,7 @@ export class PolarVisRow {
 
     createSpan(
       "ACCLPOrderSpan",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Order:",
@@ -2904,6 +2861,7 @@ export class PolarVisRow {
 
     this.ACCLPOrderInput = createNumInput(
       "ACCLPOrderInput",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["dark-input", "input-width-3_5"],
       1,
@@ -2915,6 +2873,7 @@ export class PolarVisRow {
 
     createSpan(
       "ACCLPCutoffSpan",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Cutoff (Hz):",
@@ -2922,6 +2881,7 @@ export class PolarVisRow {
 
     this.ACCLPCutoffInput = createNumInput(
       "ACCLPCutoffInput",
+      PolarVisRow.polarRowID,
       this.ACCLPConfigDiv,
       ["dark-input", "freq-input-width"],
       ACC_BAND_LOW_MIN_HZ,
@@ -2934,18 +2894,21 @@ export class PolarVisRow {
     //-------------------------------------------------------------------------//
     this.ACCFilterConfigDiv = createDiv(
       "ACCFilterConfigDiv",
+      PolarVisRow.polarRowID,
       this.ACCConfigDiv,
       ["full-width", "flexbox"],
     );
 
     createSpan(
       "ACCFilterTypeSpan",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Filter Type:",
     );
     this.ACCFilterTypesSelect = createSelect(
       "ACCFilterTypesSelect",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["form-select", "dark-input", "select-sm", "filter-type-width"],
       "",
@@ -2956,12 +2919,14 @@ export class PolarVisRow {
 
     createSpan(
       "ACCFilterCharSpan",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Char:",
     );
     this.ACCFilterCharSelect = createSelect(
       "ACCFilterCharSelect",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["form-select", "dark-input", "select-sm", "filter-char-width"],
       "",
@@ -2972,6 +2937,7 @@ export class PolarVisRow {
 
     createSpan(
       "ACCFilterOrderSpan",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Order:",
@@ -2979,6 +2945,7 @@ export class PolarVisRow {
 
     this.ACCFilterOrderInput = createNumInput(
       "ACCFilterOrderInput",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["dark-input", "input-width-3_5"],
       1,
@@ -2990,6 +2957,7 @@ export class PolarVisRow {
 
     createSpan(
       "ACCFilterCutoffSpan",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["padleft-5px", "padright-5px"],
       "Cutoff (Hz):",
@@ -2997,6 +2965,7 @@ export class PolarVisRow {
 
     this.ACCFilterCutoffInput = createNumInput(
       "ACCFilterCutoffInput",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["dark-input", "freq-input-width", "hide"],
       ACC_BAND_LOW_MIN_HZ,
@@ -3011,6 +2980,7 @@ export class PolarVisRow {
 
     this.ACCFilterLowCutInput = createNumInput(
       "ACCFilterLowCutInput",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["margin-left-5", "dark-input", "freq-input-width"],
       ACC_BAND_LOW_MIN_HZ,
@@ -3025,6 +2995,7 @@ export class PolarVisRow {
 
     this.ACCFilterHighCutInput = createNumInput(
       "ACCFilterHighCutInput",
+      PolarVisRow.polarRowID,
       this.ACCFilterConfigDiv,
       ["margin-left-5", "dark-input", "freq-input-width"],
       this.acc_filter_info.Fl,
@@ -3045,20 +3016,20 @@ export class PolarVisRow {
   }
 
   private async initDeviceGraphCtrl() {
-    this.ECGCtrlDiv = createDiv("ECGCtrlDiv", this.dataCtrl, ["half-width"]);
-    const ECG_switch = createSwitch("EXG", this.onToggleECG);
+    this.ECGCtrlDiv = createDiv("ECGCtrlDiv", PolarVisRow.polarRowID, this.dataCtrl, ["half-width"]);
+    const ECG_switch = createSwitch("EXG", this.onToggleECG, PolarVisRow.polarRowID);
     this.ECGCtrlDiv.appendChild(ECG_switch);
     this.ECGSwitchInput = ECG_switch.children.item(0) as HTMLInputElement;
-    this.ECGDropDown = createDiv("ECGDropDownDiv", this.ECGCtrlDiv, [
+    this.ECGDropDown = createDiv("ECGDropDownDiv", PolarVisRow.polarRowID, this.ECGCtrlDiv, [
       "form-group",
     ]);
     this.generateECGFormSelect();
 
-    this.ACCCtrlDiv = createDiv("ACCCtrlDiv", this.dataCtrl, ["half-width"]);
-    const ACC_switch = createSwitch("ACC", this.onToggleACC);
+    this.ACCCtrlDiv = createDiv("ACCCtrlDiv", PolarVisRow.polarRowID, this.dataCtrl, ["half-width"]);
+    const ACC_switch = createSwitch("ACC", this.onToggleACC, PolarVisRow.polarRowID);
     this.ACCCtrlDiv.appendChild(ACC_switch);
     this.ACCSwitchInput = ACC_switch.children.item(0) as HTMLInputElement;
-    this.ACCDropDown = createDiv("ACCDropDownDiv", this.ACCCtrlDiv, [
+    this.ACCDropDown = createDiv("ACCDropDownDiv", PolarVisRow.polarRowID, this.ACCCtrlDiv, [
       "form-group",
     ]);
     this.generateACCFormSelect();
@@ -3085,6 +3056,7 @@ export class PolarVisRow {
 
     this.ECGFormSelect = createSelect(
       "ECGFormSelect",
+      PolarVisRow.polarRowID,
       this.ECGDropDown,
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
@@ -3105,6 +3077,7 @@ export class PolarVisRow {
     }
     this.ACCFormSelect = createSelect(
       "ACCFormSelect",
+      PolarVisRow.polarRowID,
       this.ACCDropDown,
       ["form-select", "dark-input", "select-sm", "almost-full-width"],
       "",
@@ -3120,24 +3093,14 @@ export class PolarVisRow {
     this.ACCFormSelect.disabled = disabled;
   }
 
-  async startECG(
-    sampleRate: number = ECG_SAMPLE_RATE_HZ,
-    addCallback: boolean = true,
-  ) {
+  async startECG(sampleRate: number = ECG_SAMPLE_RATE_HZ, addCallback: boolean = true) {
     const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ECGIsOn);
     if (duplicateInd < 0) {
       try {
         const startECGReply = await this.polarH10.startECG(sampleRate);
-        if (
-          startECGReply?.error === "SUCCESS" ||
-          startECGReply?.error === "ALREADY IN STATE"
-        ) {
+        if (startECGReply?.error === "SUCCESS" || startECGReply?.error === "ALREADY IN STATE") {
           if (addCallback) {
             this.polarH10.addEventListener("ECG", this.newECGCallback);
-          }
-          if (PolarVisRow.is_recording) {
-            PolarVisRow.createNewRecordEntry(this);
-            this.polarH10.addEventListener("ECG", this.recordECGData);
           }
         } else {
           console.log(startECGReply);
@@ -3160,37 +3123,24 @@ export class PolarVisRow {
         if (stopECGReply) {
           console.log(stopECGReply);
         }
-        this.polarH10.removeEventListener("ECG", this.recordECGData);
       } catch (e) {
         console.log(e);
         alert(e);
-        if (e.name === "NetworkError") {
+        if ((e as Error).name === "NetworkError") {
           this.disconnectPolarH10();
         }
       }
     }
   }
 
-  async startACC(
-    range: number = ACC_RANGE_G,
-    sampleRate: number = ACC_SAMPLE_RATE_HZ,
-    addCallback: boolean = true,
-  ) {
+  async startACC(range: number = ACC_RANGE_G, sampleRate: number = ACC_SAMPLE_RATE_HZ, addCallback: boolean = true) {
     const duplicateInd = PolarVisRow.includesDuplicate(this, "device", ACCIsOn);
     if (duplicateInd < 0) {
       try {
         const startACCReply = await this.polarH10.startACC(range, sampleRate);
-        if (
-          startACCReply?.error === "SUCCESS" ||
-          startACCReply?.error === "ALREADY IN STATE"
-        ) {
+        if (startACCReply?.error === "SUCCESS" || startACCReply?.error === "ALREADY IN STATE") {
           if (addCallback) {
             this.polarH10.addEventListener("ACC", this.newACCCallback);
-          }
-
-          if (PolarVisRow.is_recording) {
-            PolarVisRow.createNewRecordEntry(this);
-            this.polarH10.addEventListener("ACC", this.recordACCData);
           }
         } else {
           console.log(startACCReply);
@@ -3213,11 +3163,10 @@ export class PolarVisRow {
         if (stopACCReply) {
           console.log(stopACCReply);
         }
-        this.polarH10.removeEventListener("ACC", this.recordACCData);
       } catch (e) {
         console.log(e);
         alert(e);
-        if (e.name === "NetworkError") {
+        if ((e as Error).name === "NetworkError") {
           this.disconnectPolarH10();
         }
       }
@@ -3233,324 +3182,3 @@ export class PolarVisRow {
   }
 }
 
-function resizeSmoothieGen(
-  chart: SmoothieChart,
-  widthRatio: number,
-  heightRatio: number,
-  verbose: boolean = false,
-) {
-  const resize = () => {
-    const canvas: any = (chart as any).canvas;
-    const parent: HTMLElement = canvas.parentNode;
-    let width = parent.offsetWidth;
-    let height = parent.offsetHeight;
-    const new_width = width * widthRatio;
-    const new_height = height * heightRatio;
-    canvas.width = new_width - 5;
-    canvas.height = new_height;
-    if (verbose) {
-      console.log(
-        `Resize at ${new Date().valueOf()} parent: ${parent.id} ${parent.offsetWidth} ${canvas.width} ${parent.offsetHeight} ${canvas.height}`,
-      );
-    }
-  };
-  return resize;
-}
-
-function createSwitch(
-  labeltext: string,
-  eventHandler: (ev: Event) => void,
-  idGenerator: () => number = getPolarRowId,
-) {
-  const label = document.createElement("label");
-  label.setAttribute("class", "form-switch");
-  label.classList.add("label-sm");
-  const input = document.createElement("input");
-  input.id = `${labeltext}-onoff-${idGenerator()}`;
-  input.type = "checkbox";
-  input.addEventListener("change", eventHandler);
-  input.classList.add("input-sm");
-  const icon = document.createElement("i");
-  icon.classList.add("form-icon");
-  label.textContent = labeltext;
-  label.appendChild(input);
-  label.appendChild(icon);
-  return label;
-}
-
-function createSelect(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  options: string[] | number[] = [],
-  selectedInd: number | undefined = undefined,
-  idGenerator: () => number = getPolarRowId,
-) {
-  const select = document.createElement("select");
-  configureHTMLElement(select, id, parent, classList, textContent, idGenerator);
-  addOptionsToSelect(select, options, idGenerator);
-  if (selectedInd !== undefined) {
-    select.selectedIndex = selectedInd;
-  }
-  return select;
-}
-
-function addOptionsToSelect(
-  select: HTMLSelectElement,
-  options: string[] | number[],
-  idGenerator: () => number = getPolarRowId,
-) {
-  for (let i = 0; i < options.length; i++) {
-    const option_str = options[i];
-    const option: HTMLOptionElement = document.createElement("option");
-    option.id = `${select.id}-${i}-${idGenerator()}`;
-    option.textContent = option_str.toString();
-    select.appendChild(option);
-  }
-}
-
-function createDiv(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const myDiv = document.createElement("div");
-  configureHTMLElement(myDiv, id, parent, classList, textContent, idGenerator);
-  return myDiv;
-}
-
-function createNumInput(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  min: number = 0,
-  max: number = 100,
-  step: number = 1,
-  val: number = 1,
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const myNumInput = document.createElement("input");
-  configureHTMLElement(
-    myNumInput,
-    id,
-    parent,
-    ["form-input", "input-sm", ...classList],
-    textContent,
-    idGenerator,
-  );
-  myNumInput.setAttribute("type", "number");
-  myNumInput.setAttribute("min", min.toString());
-  myNumInput.setAttribute("max", max.toString());
-  myNumInput.setAttribute("step", step.toString());
-  myNumInput.setAttribute("value", val.toString());
-  return myNumInput;
-}
-
-function createTextInput(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const myNumInput = document.createElement("input");
-  configureHTMLElement(
-    myNumInput,
-    id,
-    parent,
-    ["form-input", "input-sm", ...classList],
-    textContent,
-    idGenerator,
-  );
-  myNumInput.setAttribute("type", "text");
-  return myNumInput;
-}
-
-function createSpan(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const mySpan = document.createElement("span");
-  configureHTMLElement(mySpan, id, parent, classList, textContent, idGenerator);
-  return mySpan;
-}
-
-function createSlider(
-  id: string,
-  min: number,
-  max: number,
-  value: number,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const mySlider = document.createElement("input");
-  mySlider.setAttribute("type", "range");
-  const minStr = min.toString();
-  const maxStr = max.toString();
-  mySlider.setAttribute("min", minStr);
-  mySlider.setAttribute("max", maxStr);
-  mySlider.setAttribute("value", value.toString());
-  mySlider.setAttribute("data-tooltip", value.toString());
-  createSpan(`${id}Min`, parent, ["padright-5px"], minStr);
-  configureHTMLElement(
-    mySlider,
-    id,
-    parent,
-    ["slider", "tooltip", ...classList],
-    textContent,
-    idGenerator,
-  );
-  createSpan(`${id}Max`, parent, ["padleft-5px", "padright-5px"], maxStr);
-  return mySlider;
-}
-
-function createCanvas(
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  const myCanvas = document.createElement("canvas");
-  configureHTMLElement(
-    myCanvas,
-    id,
-    parent,
-    classList,
-    textContent,
-    idGenerator,
-  );
-  return myCanvas;
-}
-
-function configureHTMLElement(
-  e: HTMLElement,
-  id: string,
-  parent: HTMLElement | undefined = undefined,
-  classList: string[] = [],
-  textContent: string = "",
-  idGenerator: () => number = getPolarRowId,
-) {
-  e.id = `${id}-${idGenerator()}`;
-  if (parent) {
-    parent.appendChild(e);
-  }
-  if (classList.length > 0) {
-    e.classList.add(...classList);
-  }
-  if (textContent.length > 0) {
-    e.textContent = textContent;
-  }
-  return e;
-}
-
-function getPolarRowId() {
-  return PolarVisRow.polarRowID;
-}
-
-function ECGIsOn(row: PolarVisRow) {
-  return row.ECGDiv !== undefined;
-}
-
-function ACCIsOn(row: PolarVisRow) {
-  return row.ACCDiv !== undefined;
-}
-
-type TPDir = "top" | "right" | "bottom" | "left";
-
-function addTooltip(e: HTMLElement, tooltip: string, dir: TPDir = "top") {
-  e.setAttribute("data-tooltip", tooltip);
-  e.classList.add("tooltip", `tooltip-${dir}`);
-}
-
-export function createButtonIcon(
-  type: string,
-  id: string | undefined = undefined,
-  parent: HTMLElement | undefined = undefined,
-  isMaterialIcon: boolean = false,
-  onclick: GlobalEventHandlers["onclick"] | undefined = undefined,
-  classList: string[] = [],
-  idGenerator: () => number | undefined = getPolarRowId,
-) {
-  const btn = document.createElement("button");
-  if (id) {
-    const id_suffix = idGenerator();
-    if (id_suffix !== undefined) {
-      btn.id = `${id}-${id_suffix}`;
-    } else {
-      btn.id = id;
-    }
-  }
-  btn.classList.add("flexbox", "center");
-  const icon = document.createElement("i");
-  if (isMaterialIcon) {
-    icon.classList.add("material-icons");
-    icon.textContent = type;
-  } else {
-    icon.classList.add("icon", `icon-${type}`);
-  }
-
-  btn.appendChild(icon);
-  if (classList.length > 0) {
-    btn.classList.add(...classList);
-  }
-  if (onclick) {
-    btn.onclick = onclick;
-  }
-  if (parent) {
-    parent.appendChild(btn);
-  }
-  return btn;
-}
-
-function capitalizeFirstLetter(str) {
-  if (typeof str !== "string" || str.length === 0) {
-    return str; // Handle non-string or empty inputs
-  }
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function prettyPrintFilter(filterInfo: FilterInfo, cap: boolean = true) {
-  let str: string = "";
-  if (filterInfo.type === "lowpass" || filterInfo.type === "highpass") {
-    str = `${filterInfo.type} (${Number.isInteger(filterInfo.Fc) ? filterInfo.Fc : filterInfo.Fc?.toFixed(1)}Hz ${filterInfo.order} order ${capitalizeFirstLetter(filterInfo.characteristic)})`;
-  } else {
-    str = `bandpass (${Number.isInteger(filterInfo.Fl) ? filterInfo.Fl : filterInfo.Fl?.toFixed(1)}-${Number.isInteger(filterInfo.Fh) ? filterInfo.Fh : filterInfo.Fh?.toFixed(1)}Hz ${filterInfo.order} order ${capitalizeFirstLetter(filterInfo.characteristic)})`;
-  }
-  if (cap) {
-    str = capitalizeFirstLetter(str);
-  }
-  return str;
-}
-
-function compactPrettyPrintFilter(filterInfo: FilterInfo) {
-  let str: string = "";
-  if (filterInfo.type === "lowpass" || filterInfo.type === "highpass") {
-    str = `${Number.isInteger(filterInfo.Fc) ? filterInfo.Fc : filterInfo.Fc?.toFixed(1)}Hz ${filterInfo.type}`;
-  } else {
-    str = `${Number.isInteger(filterInfo.Fl) ? filterInfo.Fl : filterInfo.Fl?.toFixed(1)}-${Number.isInteger(filterInfo.Fh) ? filterInfo.Fh : filterInfo.Fh?.toFixed(1)}Hz ${filterInfo.type}`;
-  }
-  return str;
-}
-
-export function download(
-  filename: string,
-  content: string,
-  mimeType: string = "application/json",
-) {
-  const a = document.createElement("a"); // Create "a" element
-  const blob = new Blob([content], { type: mimeType }); // Create a blob (file-like object)
-  const url = URL.createObjectURL(blob); // Create an object URL from blob
-  a.setAttribute("href", url); // Set "a" element link
-  a.setAttribute("download", filename); // Set download filename
-  a.click(); // Start downloading
-}
