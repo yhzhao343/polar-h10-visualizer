@@ -1,12 +1,9 @@
-import {
-  createPolarVisRow,
-  PolarVisRow,
-} from "./PolarH10VisualizerRow";
+import { createPolarVisRow, PolarVisRow } from "./PolarH10VisualizerRow";
 import { VernierVisRow } from "./VernierRespirationBeltVisualizerRow";
 import godirect from "@vernier/godirect";
 import { SERVICES } from "polar-h10";
 import { tableFromIPC, Schema, Field, Float64 } from "apache-arrow";
-import { createButtonIcon, createSwitch } from "./helpers"
+import { createButtonIcon, createSwitch } from "./helpers";
 import { ArrowStreamer } from "./ArrowStreamer";
 import { HEART_INDEX } from "./consts";
 
@@ -37,8 +34,11 @@ function getCurrentTime() {
   return `${year}${month}${day}_${hours}${minutes}${seconds}`;
 }
 
-(window as any).hasAnyActiveStream = () => {
-  return PolarVisRow.hasAnyActiveStream() || VernierVisRow.hasAnyActiveStream();
+(window as any).hasAnyConnectedSensor = () => {
+  return (
+    PolarVisRow.polarVisRows.length > 0 ||
+    VernierVisRow.vernierVisRows.length > 0
+  );
 };
 
 const webapp_container = document.createElement("div");
@@ -67,7 +67,12 @@ top_bar_div.appendChild(left_controls);
 
 // Polar Button
 const ble_conn_btn = createButtonIcon(
-  "monitor_heart", 0, "ble_connect_btn", left_controls, true, bleConnectHandle,
+  "monitor_heart",
+  0,
+  "ble_connect_btn",
+  left_controls,
+  true,
+  bleConnectHandle,
   ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
 ble_conn_btn.setAttribute("data-tooltip", "Connect Polar H10");
@@ -76,21 +81,36 @@ if (polarIcon) polarIcon.style.fontSize = "22px";
 
 // Vernier Button
 const vernier_conn_btn = createButtonIcon(
-  "air", 0, "vernier_connect_btn", left_controls, true, vernierConnectHandle,
+  "air",
+  0,
+  "vernier_connect_btn",
+  left_controls,
+  true,
+  vernierConnectHandle,
   ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
-vernier_conn_btn.setAttribute("data-tooltip", "Connect Vernier Respiration Belt");
+vernier_conn_btn.setAttribute(
+  "data-tooltip",
+  "Connect Vernier Respiration Belt",
+);
 const vernierIcon = vernier_conn_btn.querySelector("i");
 if (vernierIcon) vernierIcon.style.fontSize = "22px";
 
 // Disconnect All Button
 const ble_disconnect_btn = createButtonIcon(
-  "cross", 0, "ble_disconnect_btn", left_controls, false, stopStreamExit,
+  "cross",
+  0,
+  "ble_disconnect_btn",
+  left_controls,
+  false,
+  stopStreamExit,
   ["btn", "btn-error", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
-ble_disconnect_btn.setAttribute("data-tooltip", "Stop all streams and disconnect");
+ble_disconnect_btn.setAttribute(
+  "data-tooltip",
+  "Stop all streams and disconnect",
+);
 ble_disconnect_btn.disabled = true;
-
 
 // 2. MIDDLE SECTION (Three-way split: Title | Triggers | Meta)
 const middle_section = document.createElement("div");
@@ -124,11 +144,16 @@ middle_center.style.gap = "8px";
 middle_section.appendChild(middle_center);
 
 const trigger_btn = createButtonIcon(
-  "keyboard", 0, "trigger_btn", middle_center, true, () => {
+  "keyboard",
+  0,
+  "trigger_btn",
+  middle_center,
+  true,
+  () => {
     renderTriggerModal();
     document.getElementById("trigger-modal")?.classList.add("active");
   },
-  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"]
+  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
 trigger_btn.setAttribute("data-tooltip", "Configure Event Triggers");
 
@@ -149,13 +174,17 @@ trigger_history.style.lineHeight = "1.2";
 middle_center.appendChild(trigger_history);
 
 const trigger_clear_btn = createButtonIcon(
-  "backspace", 0, "trigger_clear_btn", middle_center, true, () => {
+  "backspace",
+  0,
+  "trigger_clear_btn",
+  middle_center,
+  true,
+  () => {
     trigger_history.innerHTML = "";
   },
-  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"]
+  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
 trigger_clear_btn.setAttribute("data-tooltip", "Clear Display");
-
 
 // Middle-Right: Meta Inputs
 const middle_right = document.createElement("div");
@@ -182,7 +211,7 @@ function createInput(parent: HTMLElement, val: string, width: string) {
   input.value = val;
   input.className = "form-input input-sm dark-input";
   input.style.width = width;
-  input.id = `top-bar-${top_input_counter}`
+  input.id = `top-bar-${top_input_counter}`;
   parent.appendChild(input);
   top_input_counter += 1;
   return input;
@@ -201,10 +230,11 @@ const sesInput = createInput(middle_right, "1", "35px");
 const exportCsvSwitch = createSwitch("Export CSV", () => {}, 9999);
 exportCsvSwitch.style.marginLeft = "5px";
 exportCsvSwitch.style.marginBottom = "0";
-const exportCsvCheckbox = exportCsvSwitch.querySelector("input") as HTMLInputElement;
+const exportCsvCheckbox = exportCsvSwitch.querySelector(
+  "input",
+) as HTMLInputElement;
 exportCsvCheckbox.checked = true; // Checked by default
 middle_right.appendChild(exportCsvSwitch);
-
 
 // 3. RIGHT CONTROLS (Recording)
 const right_controls = document.createElement("div");
@@ -223,8 +253,13 @@ let directoryHandle: FileSystemDirectoryHandle | null = null;
 let currentRunDirHandle: FileSystemDirectoryHandle | null = null;
 
 const folder_btn = createButtonIcon(
-  "folder", 0, "folder_btn", folderContainer, true, selectFolderHandle,
-  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"]
+  "folder",
+  0,
+  "folder_btn",
+  folderContainer,
+  true,
+  selectFolderHandle,
+  ["btn", "btn-primary", "btn-action", "s-circle", "tooltip", "tooltip-bottom"],
 );
 folder_btn.setAttribute("data-tooltip", "Select Export Folder");
 
@@ -252,8 +287,12 @@ let recordingStartTimeIso: string = "";
 
 function updateTimerUI() {
   const diff = Math.floor((Date.now() - recordingStartTime) / 1000);
-  const h = Math.floor(diff / 3600).toString().padStart(2, "0");
-  const m = Math.floor((diff % 3600) / 60).toString().padStart(2, "0");
+  const h = Math.floor(diff / 3600)
+    .toString()
+    .padStart(2, "0");
+  const m = Math.floor((diff % 3600) / 60)
+    .toString()
+    .padStart(2, "0");
   const s = (diff % 60).toString().padStart(2, "0");
   timerLabel.textContent = `${h}:${m}:${s}`;
 }
@@ -261,8 +300,21 @@ function updateTimerUI() {
 // Record Button
 let is_recording = false;
 const record_btn = createButtonIcon(
-  "radio_button_unchecked", 0, "record_btn", right_controls, true, onRecordClicked,
-  ["btn", "btn-primary", "btn-action", "s-circle", "center", "tooltip", "tooltip-bottom"]
+  "radio_button_unchecked",
+  0,
+  "record_btn",
+  right_controls,
+  true,
+  onRecordClicked,
+  [
+    "btn",
+    "btn-primary",
+    "btn-action",
+    "s-circle",
+    "center",
+    "tooltip",
+    "tooltip-bottom",
+  ],
 );
 
 const recording_icon = document.createElement("i");
@@ -272,7 +324,6 @@ const record_icon = record_btn.children[0];
 record_btn.setAttribute("data-tooltip", "Start recording");
 record_btn.appendChild(recording_icon);
 record_btn.disabled = true;
-
 
 // --- MAIN CONTENT AREA ---
 const content = document.createElement("div");
@@ -292,7 +343,8 @@ content.appendChild(vernier_content_div);
 
 if (navigator.bluetooth === undefined) {
   const debug_message = document.createElement("p");
-  debug_message.innerHTML = "Web Bluetooth API is not present!<br>\n" +
+  debug_message.innerHTML =
+    "Web Bluetooth API is not present!<br>\n" +
     "Please make sure you are using the latest chrome/chromium based browser.<br>\n" +
     'Also make sure to enable experimental-web-platform-features in your browser <a href="chrome://flags/#enable-experimental-web-platform-features">chrome://flags/#enable-experimental-web-platform-features</a> ';
   debug_message.setAttribute("style", "margin:5% 20%;font-size:1.4em;");
@@ -303,7 +355,7 @@ if (navigator.bluetooth === undefined) {
 // --- EVENT TRIGGER LOGIC ---
 let triggerEntries = [
   { key: "0", desc: "Event 0" },
-  { key: "1", desc: "Event 1" }
+  { key: "1", desc: "Event 1" },
 ];
 let triggerStreamer: ArrowStreamer | null = null;
 
@@ -391,7 +443,7 @@ function renderTriggerModal() {
   const allEntries = [
     { key: "[", desc: "recording start", builtIn: true },
     { key: "]", desc: "recording ends", builtIn: true },
-    ...triggerEntries.map(e => ({ ...e, builtIn: false }))
+    ...triggerEntries.map((e) => ({ ...e, builtIn: false })),
   ];
 
   allEntries.forEach((entry, idx) => {
@@ -401,7 +453,7 @@ function renderTriggerModal() {
     row.style.marginBottom = "8px";
 
     const keyInput = document.createElement("input");
-    keyInput.id = `modal-${top_input_counter}`
+    keyInput.id = `modal-${top_input_counter}`;
     keyInput.className = "form-input input-sm dark-input";
     keyInput.style.width = "50px";
     keyInput.maxLength = 1;
@@ -424,7 +476,9 @@ function renderTriggerModal() {
     descInput.value = entry.desc;
     descInput.disabled = is_recording || entry.builtIn;
     descInput.placeholder = "Description";
-    descInput.onchange = (e) => { triggerEntries[idx - 2].desc = (e.target as HTMLInputElement).value; };
+    descInput.onchange = (e) => {
+      triggerEntries[idx - 2].desc = (e.target as HTMLInputElement).value;
+    };
     descInput.id = `modal-${top_input_counter}`;
     top_input_counter += 1;
 
@@ -454,19 +508,29 @@ renderTriggerModal();
 
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return; // Prevent holding-down spam
-  if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)) return;
+  if (
+    e.target &&
+    ["INPUT", "SELECT", "TEXTAREA"].includes((e.target as HTMLElement).tagName)
+  )
+    return;
 
   // Block manual [ and ] to preserve system integrity
   if (e.key === "[" || e.key === "]") return;
 
-  const entry = triggerEntries.find(t => t.key.toLowerCase() === e.key.toLowerCase());
+  const entry = triggerEntries.find(
+    (t) => t.key.toLowerCase() === e.key.toLowerCase(),
+  );
   if (entry) {
     const now = Date.now();
     let timeStr = "00:00:00";
     if (is_recording) {
       const diff = Math.floor((now - recordingStartTime) / 1000);
-      const h = Math.floor(diff / 3600).toString().padStart(2, "0");
-      const m = Math.floor((diff % 3600) / 60).toString().padStart(2, "0");
+      const h = Math.floor(diff / 3600)
+        .toString()
+        .padStart(2, "0");
+      const m = Math.floor((diff % 3600) / 60)
+        .toString()
+        .padStart(2, "0");
       const s = (diff % 60).toString().padStart(2, "0");
       timeStr = `${h}:${m}:${s}`;
     }
@@ -484,18 +548,17 @@ window.addEventListener("keydown", (e) => {
     if (is_recording && triggerStreamer) {
       triggerStreamer.push({
         epoch_timestamp_ms: now,
-        key_code: e.key.charCodeAt(0)
+        key_code: e.key.charCodeAt(0),
       });
     }
   }
 });
 
-
 // --- FUNCTIONALITY ---
 
 async function selectFolderHandle() {
   try {
-    directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    directoryHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     const name = directoryHandle.name;
     folderLabel.textContent = name;
     folderContainer.setAttribute("data-tooltip", name);
@@ -506,17 +569,22 @@ async function selectFolderHandle() {
   }
 }
 
-async function convertArrowToCSV(fileHandle: FileSystemFileHandle, dirHandle: FileSystemDirectoryHandle) {
+async function convertArrowToCSV(
+  fileHandle: FileSystemFileHandle,
+  dirHandle: FileSystemDirectoryHandle,
+) {
   const file = await fileHandle.getFile();
   const buffer = await file.arrayBuffer();
 
   // Parse the Arrow IPC file
   const table = tableFromIPC(buffer);
-  const fields = table.schema.fields.map(f => f.name);
-  const cols = fields.map(f => table.getChild(f));
+  const fields = table.schema.fields.map((f) => f.name);
+  const cols = fields.map((f) => table.getChild(f));
 
   const csvName = file.name.replace(".arrow", ".csv");
-  const csvFileHandle = await dirHandle.getFileHandle(csvName, { create: true });
+  const csvFileHandle = await dirHandle.getFileHandle(csvName, {
+    create: true,
+  });
   const writable = await csvFileHandle.createWritable();
 
   // Write header
@@ -561,11 +629,18 @@ async function onRecordClicked(ev: any) {
     if (triggerStreamer) {
       const stopNow = Date.now();
       const diff = Math.floor((stopNow - recordingStartTime) / 1000);
-      const h = Math.floor(diff / 3600).toString().padStart(2, "0");
-      const m = Math.floor((diff % 3600) / 60).toString().padStart(2, "0");
+      const h = Math.floor(diff / 3600)
+        .toString()
+        .padStart(2, "0");
+      const m = Math.floor((diff % 3600) / 60)
+        .toString()
+        .padStart(2, "0");
       const s = (diff % 60).toString().padStart(2, "0");
 
-      triggerStreamer.push({ epoch_timestamp_ms: stopNow, key_code: "]".charCodeAt(0) });
+      triggerStreamer.push({
+        epoch_timestamp_ms: stopNow,
+        key_code: "]".charCodeAt(0),
+      });
 
       const histItem = document.createElement("div");
       histItem.textContent = `[${h}:${m}:${s}] ]: recording ends`;
@@ -583,10 +658,18 @@ async function onRecordClicked(ev: any) {
 
     // Gracefully stop all streams (flush Arrow caches to disk)
     for (const row of PolarVisRow.polarVisRows) {
-      try { await row.stopRecording(); } catch (e) { console.error(e); }
+      try {
+        await row.stopRecording();
+      } catch (e) {
+        console.error(e);
+      }
     }
     for (const row of VernierVisRow.vernierVisRows) {
-      try { await row.stopRecording(); } catch (e) { console.error(e); }
+      try {
+        await row.stopRecording();
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     // Export Master Metadata JSON & Parse CSVs
@@ -599,33 +682,53 @@ async function onRecordClicked(ev: any) {
           ses: sesInput.value,
           recording_start_time: recordingStartTimeIso,
           recording_end_time: new Date().toISOString(),
-          sensors: []
+          sensors: [],
         };
 
         for (const row of PolarVisRow.polarVisRows) {
-          if (row.ECGIsOn()) metadataExport.sensors.push(Object.fromEntries(row.getEcgMeta()));
-          if (row.ACCIsOn()) metadataExport.sensors.push(Object.fromEntries(row.getAccMeta()));
-          if (row.bodypartSelect.selectedIndex === HEART_INDEX) metadataExport.sensors.push(Object.fromEntries(row.getHRMeta()));
+          if (row.ECGIsOn())
+            metadataExport.sensors.push(Object.fromEntries(row.getEcgMeta()));
+          if (row.ACCIsOn())
+            metadataExport.sensors.push(Object.fromEntries(row.getAccMeta()));
+          if (row.bodypartSelect.selectedIndex === HEART_INDEX)
+            metadataExport.sensors.push(Object.fromEntries(row.getHRMeta()));
         }
         for (const row of VernierVisRow.vernierVisRows) {
-          if (row.forceIsOn()) metadataExport.sensors.push(Object.fromEntries(row.getForceMeta()));
-          if (row.brIsOn()) metadataExport.sensors.push(Object.fromEntries(row.getBRMeta()));
+          if (row.forceIsOn())
+            metadataExport.sensors.push(Object.fromEntries(row.getForceMeta()));
+          if (row.brIsOn())
+            metadataExport.sensors.push(Object.fromEntries(row.getBRMeta()));
         }
 
-        const trigMeta: any = { sensor_name: "Keyboard", modality: "Event_Trigger", "trigger_[": "recording start", "trigger_]": "recording ends" };
-        triggerEntries.forEach(t => { if (t.key.trim() !== "") trigMeta[`trigger_${t.key}`] = t.desc; });
+        const trigMeta: any = {
+          sensor_name: "Keyboard",
+          modality: "Event_Trigger",
+          "trigger_[": "recording start",
+          "trigger_]": "recording ends",
+        };
+        triggerEntries.forEach((t) => {
+          if (t.key.trim() !== "") trigMeta[`trigger_${t.key}`] = t.desc;
+        });
         metadataExport.sensors.push(trigMeta);
 
-        const metaFileHandle = await currentRunDirHandle.getFileHandle(`metadata.json`, { create: true });
+        const metaFileHandle = await currentRunDirHandle.getFileHandle(
+          `metadata.json`,
+          { create: true },
+        );
         const metaWritable = await metaFileHandle.createWritable();
         await metaWritable.write(JSON.stringify(metadataExport, null, 2));
         await metaWritable.close();
 
         // Convert saved arrow streams to CSV
         if (exportCsvCheckbox.checked) {
-          for await (const [name, handle] of (currentRunDirHandle as any).entries()) {
-            if (handle.kind === 'file' && name.endsWith('.arrow')) {
-              await convertArrowToCSV(handle as FileSystemFileHandle, currentRunDirHandle);
+          for await (const [name, handle] of (
+            currentRunDirHandle as any
+          ).entries()) {
+            if (handle.kind === "file" && name.endsWith(".arrow")) {
+              await convertArrowToCSV(
+                handle as FileSystemFileHandle,
+                currentRunDirHandle,
+              );
             }
           }
         }
@@ -644,7 +747,6 @@ async function onRecordClicked(ev: any) {
     ble_conn_btn.disabled = false;
     vernier_conn_btn.disabled = false;
     updateButtons();
-
   } else {
     if (!directoryHandle) return;
 
@@ -668,25 +770,34 @@ async function onRecordClicked(ev: any) {
     const dStr = getCurrentTime();
     const runFolderName = `${sName}_sub-${sub}_ses-${ses}_date-${dStr}`;
 
-    currentRunDirHandle = await directoryHandle.getDirectoryHandle(runFolderName, { create: true });
+    currentRunDirHandle = await directoryHandle.getDirectoryHandle(
+      runFolderName,
+      { create: true },
+    );
 
     // Initialize Event Trigger Arrow Streamer
     const triggerMeta = new Map<string, string>([
       ["sensor_name", "Keyboard"],
       ["modality", "Event_Trigger"],
       ["trigger_[", "recording start"],
-      ["trigger_]", "recording ends"]
+      ["trigger_]", "recording ends"],
     ]);
-    triggerEntries.forEach(t => {
+    triggerEntries.forEach((t) => {
       if (t.key.trim() !== "") triggerMeta.set(`trigger_${t.key}`, t.desc);
     });
 
-    const triggerSchema = new Schema([
-      new Field("epoch_timestamp_ms", new Float64(), false),
-      new Field("key_code", new Float64(), false)
-    ], triggerMeta);
+    const triggerSchema = new Schema(
+      [
+        new Field("epoch_timestamp_ms", new Float64(), false),
+        new Field("key_code", new Float64(), false),
+      ],
+      triggerMeta,
+    );
 
-    const triggerFileHandle = await currentRunDirHandle.getFileHandle(`Event_Triggers.arrow`, { create: true });
+    const triggerFileHandle = await currentRunDirHandle.getFileHandle(
+      `Event_Triggers.arrow`,
+      { create: true },
+    );
     triggerStreamer = new ArrowStreamer(triggerFileHandle, triggerSchema);
 
     // Clear history views for the new recording
@@ -695,7 +806,10 @@ async function onRecordClicked(ev: any) {
 
     // Record Built-in Start Trigger
     const startNow = Date.now();
-    triggerStreamer.push({ epoch_timestamp_ms: startNow, key_code: "[".charCodeAt(0) });
+    triggerStreamer.push({
+      epoch_timestamp_ms: startNow,
+      key_code: "[".charCodeAt(0),
+    });
 
     const histItem = document.createElement("div");
     histItem.textContent = `[00:00:00] [: recording start`;
@@ -708,8 +822,10 @@ async function onRecordClicked(ev: any) {
     modalTriggerHistory.scrollTop = modalTriggerHistory.scrollHeight;
 
     // Initialize Sensor Streams
-    for (const row of PolarVisRow.polarVisRows) await row.startRecording(currentRunDirHandle);
-    for (const row of VernierVisRow.vernierVisRows) await row.startRecording(currentRunDirHandle);
+    for (const row of PolarVisRow.polarVisRows)
+      await row.startRecording(currentRunDirHandle);
+    for (const row of VernierVisRow.vernierVisRows)
+      await row.startRecording(currentRunDirHandle);
   }
 }
 
@@ -743,17 +859,29 @@ async function vernierConnectHandle() {
 
 async function stopStreamExit() {
   if (is_recording) {
-    try { await onRecordClicked(null); } catch (e) { console.error(e); }
+    try {
+      await onRecordClicked(null);
+    } catch (e) {
+      console.error(e);
+    }
   }
-  try { await PolarVisRow.disconnectAllPolarH10(); } catch (e) { console.error(e); }
+  try {
+    await PolarVisRow.disconnectAllPolarH10();
+  } catch (e) {
+    console.error(e);
+  }
   for (const row of [...VernierVisRow.vernierVisRows]) {
-    try { await row.disconnect(); } catch (e) { console.error(e); }
+    try {
+      await row.disconnect();
+    } catch (e) {
+      console.error(e);
+    }
   }
   updateButtons();
 }
 
 function updateButtons() {
-  const hasStream = (window as any).hasAnyActiveStream();
+  const hasStream = (window as any).hasAnyConnectedSensor();
   ble_disconnect_btn.disabled = !hasStream;
   if (!is_recording) {
     record_btn.disabled = !(hasStream && directoryHandle !== null);
@@ -763,7 +891,7 @@ function updateButtons() {
 (window as any).updateGlobalButtons = updateButtons;
 
 window.onbeforeunload = function (event) {
-  if ((window as any).hasAnyActiveStream()) {
+  if ((window as any).hasAnyConnectedSensor()) {
     event.preventDefault();
     event.returnValue = "";
   } else {

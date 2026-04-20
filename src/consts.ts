@@ -263,25 +263,25 @@ export const MAG_LP_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
 };
 
 export const X_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#f0883e",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f0883e",
+  };
 
 export const Y_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#f778ba",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#f778ba",
+  };
 
 export const Z_FILTER_AXIS_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions =
-{
-  lineWidth: 2,
-  interpolation: "linear",
-  strokeStyle: "#388afd",
-};
+  {
+    lineWidth: 2,
+    interpolation: "linear",
+    strokeStyle: "#388afd",
+  };
 
 export const MAG_FILTER_PRESENTATION_OPTIONS: ITimeSeriesPresentationOptions = {
   lineWidth: 2,
@@ -332,26 +332,24 @@ export const initECGFilterSettings: FilterInfo = {
   BW: ECG_BANDPASS_HIGH_CUT_HZ - ECG_BANDPASS_LOW_CUT_HZ,
   gain: undefined,
   preGain: false,
-}
+};
 
 export const initACCLowpassFilterSettings: FilterInfo = {
   type: "lowpass",
   order: AAC_LOWPASS_ORDER,
   characteristic: "butterworth",
-  // Fs: this.acc_sample_rate_hz,
   Fc: AAC_LOWPASS_CUTOFF_HZ,
   Fl: 1,
   Fh: 10,
   BW: undefined,
   gain: undefined,
   preGain: false,
-}
+};
 
 export const initACCFilterSettings: FilterInfo = {
   type: "bandpass",
   order: AAC_FILTER_ORDER,
   characteristic: "butterworth",
-  // Fs: this.acc_sample_rate_hz,
   Fc: Math.sqrt(
     AAC_FILTER_BANDPASS_LOW_CUT_HZ * AAC_FILTER_BANDPASS_HIGH_CUT_HZ,
   ),
@@ -360,4 +358,4 @@ export const initACCFilterSettings: FilterInfo = {
   BW: AAC_FILTER_BANDPASS_HIGH_CUT_HZ - AAC_FILTER_BANDPASS_LOW_CUT_HZ,
   gain: undefined,
   preGain: false,
-}
+};

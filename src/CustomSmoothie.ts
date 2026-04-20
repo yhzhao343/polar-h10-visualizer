@@ -262,7 +262,11 @@ export class CustomSmoothie extends SmoothieChart {
     // so we need to fallback to the internal this.canvas explicitly
     const targetCanvas = canvas || (this as any).canvas;
 
-    if (targetCanvas && this.enableRenderLegend && this.smoothieTSInfos.length) {
+    if (
+      targetCanvas &&
+      this.enableRenderLegend &&
+      this.smoothieTSInfos.length
+    ) {
       const last_render_time = (this as any).lastRenderTimeMillis;
       const timeDelta = Date.now() - last_render_time;
       if (timeDelta < 3) {

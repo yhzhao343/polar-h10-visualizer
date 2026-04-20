@@ -1,4 +1,9 @@
-import { tableFromArrays, RecordBatchFileWriter, RecordBatch, Schema } from "apache-arrow";
+import {
+    tableFromArrays,
+    RecordBatchFileWriter,
+    RecordBatch,
+    Schema,
+} from "apache-arrow";
 
 export class ArrowStreamer {
     private fileWritable!: FileSystemWritableFileStream;
@@ -13,8 +18,11 @@ export class ArrowStreamer {
     private counts: number = 0;
     private maxCount: number = 512;
 
-    constructor(private fileHandle: FileSystemFileHandle, private schema: Schema) {
-        this.keysOrdered = schema.fields.map(f => f.name);
+    constructor(
+        private fileHandle: FileSystemFileHandle,
+        private schema: Schema,
+    ) {
+        this.keysOrdered = schema.fields.map((f) => f.name);
 
         this.writer = new RecordBatchFileWriter();
         this.writePromise = this.init();
@@ -22,7 +30,8 @@ export class ArrowStreamer {
 
     private async init() {
         this.fileWritable = await this.fileHandle.createWritable();
-        const asyncIterable = this.writer as unknown as AsyncIterable<Uint8Array>;
+        const asyncIterable = this
+            .writer as unknown as AsyncIterable<Uint8Array>;
         try {
             for await (const chunk of asyncIterable) {
                 await this.fileWritable.write(chunk as any);
@@ -36,7 +45,8 @@ export class ArrowStreamer {
         if (this.isClosed) return;
 
         for (const key of this.keysOrdered) {
-            if (!this.buffer[key]) this.buffer[key] = new Float64Array(this.maxCount);
+            if (!this.buffer[key])
+                this.buffer[key] = new Float64Array(this.maxCount);
             this.buffer[key][this.counts] = data[key] ?? 0;
         }
 
@@ -58,11 +68,13 @@ export class ArrowStreamer {
 
         this.counts = 0;
 
-        this.flushPromise = this.flushPromise.then(() => this.encodeAndEnqueue(arrays));
+        this.flushPromise = this.flushPromise.then(() =>
+            this.encodeAndEnqueue(arrays),
+        );
     }
 
     private async encodeAndEnqueue(arrays: Record<string, Float64Array>) {
-        await new Promise(resolve => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
 
         const table = tableFromArrays(arrays);
 

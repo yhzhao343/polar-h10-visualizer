@@ -4,7 +4,9 @@ import { PolarVisRow } from "./PolarH10VisualizerRow";
 
 export function updateSearchURL(config: Object) {
   const curr_url_search_string = window.location.search;
-  const url_params: URLSearchParams = new URLSearchParams(curr_url_search_string);
+  const url_params: URLSearchParams = new URLSearchParams(
+    curr_url_search_string,
+  );
   for (const [key, val] of Object.entries(config)) {
     url_params.set(key, val);
   }
@@ -173,7 +175,6 @@ export function createSlider(
   parent: HTMLElement | undefined = undefined,
   classList: string[] = [],
   textContent: string = "",
-
 ) {
   const mySlider = document.createElement("input");
   mySlider.setAttribute("type", "range");
@@ -192,7 +193,13 @@ export function createSlider(
     textContent,
     num_id,
   );
-  createSpan(`${id}Max`, num_id, parent, ["padleft-5px", "padright-5px"], maxStr);
+  createSpan(
+    `${id}Max`,
+    num_id,
+    parent,
+    ["padleft-5px", "padright-5px"],
+    maxStr,
+  );
   return mySlider;
 }
 
@@ -204,14 +211,7 @@ export function createCanvas(
   textContent: string = "",
 ) {
   const myCanvas = document.createElement("canvas");
-  configureHTMLElement(
-    myCanvas,
-    id,
-    parent,
-    classList,
-    textContent,
-    num_id,
-  );
+  configureHTMLElement(myCanvas, id, parent, classList, textContent, num_id);
   return myCanvas;
 }
 
@@ -251,7 +251,11 @@ export function ACCIsOn(row: PolarVisRow) {
 
 type TPDir = "top" | "right" | "bottom" | "left";
 
-export function addTooltip(e: HTMLElement, tooltip: string, dir: TPDir = "top") {
+export function addTooltip(
+  e: HTMLElement,
+  tooltip: string,
+  dir: TPDir = "top",
+) {
   e.setAttribute("data-tooltip", tooltip);
   e.classList.add("tooltip", `tooltip-${dir}`);
 }
