@@ -1,11 +1,21 @@
 # polar-h10-visualizer
 
-A real-time physiological data visualizer and streaming pipeline. The system acquires data (ECG, Accelerometer, Respiration Force, and Breathing Rate) in the browser via Web Bluetooth and the Vernier Go Direct API, archives it locally as structured Apache Arrow files, and streams it instantly into Lab Streaming Layer (LSL) via a local WebSocket bridge. Supports sending keyboard trigger signal for running simple physiological data accquisition study. See it in action [here](https://yhzhao343.github.io/polar-h10-visualizer/)
+A real-time physiological data visualizer and streaming pipeline. This is a tool designed to support teaching physiological data acquisition, processing, and visualization. The system acquires data (ECG, Accelerometer, Respiration Force, and Breathing Rate) in the browser via Web Bluetooth and the Vernier Go Direct API, archives it locally as structured Apache Arrow files, and streams it instantly into Lab Streaming Layer (LSL) via a local WebSocket bridge. Supports sending keyboard trigger signal for running simple physiological data accquisition study. See it in action [here](https://yhzhao343.github.io/polar-h10-visualizer/)
 
 ## Sneak Peek
 ![polar_sneak_peek](asset/polar_sneak_peek.gif)
 
-## Using Polar-h10 to get EMG data
+## Using Polar H10 to get surface EMG data
+
+You can retro-fit a Polar H10 to make it connect to a standard electrode. Then, you can stick it on your body and use it as a surface EMG sensor. Align your modified Polar H10 with the direction of the muscle fibers to get the best signal.
+
+|       |       |       |
+| :---: | :---: | :---: |
+| ![prym_ecg_adapter](asset/prym_ecg_adapter.jpeg) | ![assembled_adapters](asset/assembled_adapters.jpeg) | ![baking_adapter](asset/baking_adapter.jpeg)|
+|   prym button to standard ECG socket             |  Assemble and paste the Adapters   | Bake in reflow oven|
+| ![sensor_and_adapter](asset/sensor_and_adapter.jpeg)|  ![assembled_sensor_with_ecg_pad_on_body_topview](asset/assembled_sensor_with_ecg_pad_on_body_topview.jpeg)   | ![assembled_sensor_with_ecg_pad_on_body](asset/assembled_sensor_with_ecg_pad_on_body.jpeg)|
+|   Fit Polar-H10 with adapters                    |  Add ECG pad and put on skin (top) | Add ECG pad and put on skin|
+
 
 ## Full Video Demo
 [![Watch the video](https://img.youtube.com/vi/kCUuH8LL9HA/mqdefault.jpg)](https://youtu.be/kCUuH8LL9HA)
@@ -26,6 +36,8 @@ A real-time physiological data visualizer and streaming pipeline. The system acq
 ```
 
 ## Installation & Build
+
+If you just want to visualize the data, and record the data as `Apache Arrow` files and `.csv` files, you don't need to install anything. You can just go to the [Github page](https://yhzhao343.github.io/polar-h10-visualizer/) to use the tool in your latest chrome browser. If you need lsl restreaming of the data obtained from the webpage in realtime. Or need to replay the recorded `Apache Arrow` file as lsl streams, then follow the steps below to setup your system.
 
 ### 0. Node.js install
 
@@ -117,9 +129,17 @@ Leaves an active daemon listening on `ws://localhost:8765`. It handles metadata 
 
  4. Click it again to stop. The system flushes the data, dumps a master metadata.json packet, and automatically generates matching `.arrow` and `.csv` files inside a timed folder block.
 
-### Tips for Running Study
+## Usage Tips
 
  1. After you select the bodypart for a sensor, you will notice that the url parameter is changed. If you use this new utl next time, after you connect to a sensor, the bodypart is automatically selected for you based on the url parameter.
+
+ 2. In a clean RF environment, the system can support visualizing 7 polar-h10 sensor data streams (both ECG and Accelerometer) without too much issue on a recent computer.
+
+ 3. The system is specifically designed to support adding the same sensor as different rows. This could be useful for teaching. For example,
+  - you can show the effect of two different filter parameters on the same time-series data.
+  - you can have the 1st row only show the ECG data, the 2nd row only show the Accelerometer data, and see the electrical signal of the heart (ECG) align with the vibration signal cause by the heart (ECG).
+
+ 4. The heart rate and heart rate variability rate measures only shows up if you select the bodypart as heart.
 
 ## Replaying Saved Sessions
 
