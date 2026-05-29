@@ -22,6 +22,7 @@
     "dev": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:window.IS_PRODUCTION=false --watch --servedir=build --allow-overwrite --format=esm --external:text-encoding",
     "build": "npm run cp-file && npm run add-coi && esbuild src/index.ts --bundle --outfile=build/index.js --sourcemap --define:window.IS_PRODUCTION=true --allow-overwrite --format=esm --minify --tree-shaking=true --external:text-encoding",
     "serve": "esbuild --servedir=build",
+    "lsl_bridge": "cd server_side/lsl_bridge && node lsl_bridge.js",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d build",
     "clean": "rm -r build"

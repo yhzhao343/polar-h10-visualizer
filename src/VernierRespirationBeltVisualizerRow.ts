@@ -527,6 +527,7 @@ export class VernierVisRow {
             this.forceResizeObserver.observe(this.forceDiv);
             this.forceResize();
             this.forceChart.start();
+            (window as any).lslBridge?.registerStream(this.getForceSchema());
         } else {
             if (this.forceChart) this.forceChart.stop();
             if (this.forceDiv) {
@@ -610,6 +611,7 @@ export class VernierVisRow {
             this.brResizeObserver.observe(this.brDiv);
             this.brResize();
             this.brChart.start();
+            (window as any).lslBridge?.registerStream(this.getBRSchema());
         } else {
             if (this.brChart) this.brChart.stop();
             if (this.brDiv) {
@@ -676,19 +678,30 @@ export class VernierVisRow {
             this.brInfo.text = `BR:${br.toFixed(1).padStart(6, " ")}(bpm)`;
         }
 
+        const force_data_payload = {
+            epoch_timestamp_ms: epoch_timestamp,
+            Force_N: force,
+        }
+
+        const br_data_payload = {
+            epoch_timestamp_ms: epoch_timestamp,
+            BR_bpm: br,
+        }
+
         if (this.is_recording) {
             if (this.forceStreamer != undefined) {
-                this.forceStreamer.push({
-                    epoch_timestamp_ms: epoch_timestamp,
-                    Force_N: force,
-                });
+                this.forceStreamer.push(force_data_payload);
             }
             if (this.brStreamer != undefined) {
-                this.brStreamer.push({
-                    epoch_timestamp_ms: epoch_timestamp,
-                    BR_bpm: br,
-                });
+                this.brStreamer.push(br_data_payload);
             }
+        }
+
+        if (this.forceIsOn()) {
+            (window as any).lslBridge?.streamData(this.getForceSchema(), force_data_payload);
+        }
+        if (this.brIsOn() && br > 0) {
+            (window as any).lslBridge?.streamData(this.getBRSchema(), br_data_payload);
         }
     }
 

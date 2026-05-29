@@ -6,6 +6,7 @@ import { tableFromIPC, Schema, Field, Float64 } from "apache-arrow";
 import { createButtonIcon, createSwitch } from "./helpers";
 import { ArrowStreamer } from "./ArrowStreamer";
 import { HEART_INDEX } from "./consts";
+import { LslBridge } from "./LslBridge";
 
 let top_input_counter = 0;
 
@@ -389,6 +390,19 @@ let triggerEntries = [
   { key: "1", desc: "Event 1" },
 ];
 let triggerStreamer: ArrowStreamer | null = null;
+const triggerMeta = new Map<string, string>([
+  ["sensor_name", "Keyboard"],
+  ["modality", "Event_Trigger"]
+]);
+const globalTriggerSchema = new Schema([
+  new Field("epoch_timestamp_ms", new Float64(), false),
+  new Field("key_code", new Float64(), false),
+], triggerMeta);
+
+// --- BUILD LSL STREAM ---
+const lslBridgeInstance = new LslBridge("ws://localhost:8765");
+lslBridgeInstance.registerStream(globalTriggerSchema);
+(window as any).lslBridge = lslBridgeInstance;
 
 // Floating Panel construction
 const floatingTriggerPanel = document.createElement("div");
@@ -689,11 +703,15 @@ function fireTrigger(key: string) {
     modalTriggerHistory.appendChild(modalHistItem);
     modalTriggerHistory.scrollTop = modalTriggerHistory.scrollHeight;
 
+    const data_payload = {
+      epoch_timestamp_ms: now,
+      key_code: entry.key.charCodeAt(0),
+    };
+
+    (window as any).lslBridge?.streamData(globalTriggerSchema, data_payload);
+
     if (is_recording && triggerStreamer) {
-      triggerStreamer.push({
-        epoch_timestamp_ms: now,
-        key_code: entry.key.charCodeAt(0),
-      });
+      triggerStreamer.push(data_payload);
     }
   }
 }

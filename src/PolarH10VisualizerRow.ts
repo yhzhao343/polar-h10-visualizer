@@ -434,6 +434,7 @@ export class PolarVisRow {
       ["sensor_name", this.getPolarName()],
       ["device_name", this.deviceName],
       ["modality", "EXG"],
+      ["unit", "microvolts"],
       ["rms_win_size", this.ecg_rms_window_size.toString()],
       ["filter_type", this.ecg_filter_info.type],
       ["filter_order", this.ecg_filter_info.order.toString()],
@@ -500,6 +501,8 @@ export class PolarVisRow {
       ["sensor_name", this.getPolarName()],
       ["device_name", this.deviceName],
       ["modality", "ACC"],
+      ["ACC_UNIT", "G"],
+      ["rho_phi_theta_unit", "deg"],
       ["lp_filter_type", this.acc_lp_info.type],
       ["lp_filter_order", this.acc_lp_info.order.toString()],
       ["lp_filter_characteristic", this.acc_lp_info.characteristic],
@@ -862,14 +865,16 @@ export class PolarVisRow {
             data_rms_i = Math.sqrt(this.ecg_mss);
           }
         }
-        if (this.is_recording && this.ecgStreamer !== undefined) {
-          this.ecgStreamer.push({
-            epoch_timestamp_ms: timestamp,
-            raw: sample_i,
-            filtered: filtered_sample_i,
-            rms: data_rms_i,
-          });
+        const data_payload = {
+          epoch_timestamp_ms: timestamp,
+          raw: sample_i,
+          filtered: filtered_sample_i,
+          rms: data_rms_i,
         }
+        if (this.is_recording && this.ecgStreamer !== undefined) {
+          this.ecgStreamer.push(data_payload);
+        }
+        (window as any).lslBridge?.streamData(this.getEcgSchema(), data_payload);
         setTimeout(() => {
           this.ecg_ts?.append(timestamp, sample_i);
           this.ecg_filter_ts?.append(timestamp, filtered_sample_i);
@@ -938,26 +943,30 @@ export class PolarVisRow {
         const y_filter_d = this.acc_y_filter_iir.singleStep(y_d);
         const z_filter_d = this.acc_z_filter_iir.singleStep(z_d);
         const mag_filter_d = this.acc_mag_filter_iir.singleStep(acc_mag);
-        if (this.is_recording && this.accStreamer !== undefined) {
-          this.accStreamer.push({
-            epoch_timestamp_ms: timestamp,
-            raw_acc_x: x_d,
-            raw_acc_y: y_d,
-            raw_acc_z: z_d,
-            raw_acc_mag: acc_mag,
-            rho: rho,
-            phi: phi,
-            theta: theta,
-            lp_acc_x: x_lp_d,
-            lp_acc_y: y_lp_d,
-            lp_acc_z: z_lp_d,
-            lp_acc_mag: mag_lp_d,
-            filtered_acc_x: x_filter_d,
-            filtered_acc_y: y_filter_d,
-            filtered_acc_z: z_filter_d,
-            filtered_acc_mag: mag_filter_d,
-          });
+        const data_payload = {
+          epoch_timestamp_ms: timestamp,
+          raw_acc_x: x_d,
+          raw_acc_y: y_d,
+          raw_acc_z: z_d,
+          raw_acc_mag: acc_mag,
+          rho: rho,
+          phi: phi,
+          theta: theta,
+          lp_acc_x: x_lp_d,
+          lp_acc_y: y_lp_d,
+          lp_acc_z: z_lp_d,
+          lp_acc_mag: mag_lp_d,
+          filtered_acc_x: x_filter_d,
+          filtered_acc_y: y_filter_d,
+          filtered_acc_z: z_filter_d,
+          filtered_acc_mag: mag_filter_d,
         }
+        if (this.is_recording && this.accStreamer !== undefined) {
+          this.accStreamer.push(data_payload);
+        }
+
+        (window as any).lslBridge?.streamData(this.getAccSchema(), data_payload);
+
         setTimeout(() => {
           this.acc_x_ts?.append(timestamp, x_d);
           this.acc_y_ts?.append(timestamp, y_d);
@@ -1033,7 +1042,7 @@ export class PolarVisRow {
             1,
             1,
             DEFAULT_ECG_LINE_CHART_OPTION.title?.text ||
-              "EXG raw voltage (0.7–40 Hz)",
+            "EXG raw voltage (0.7–40 Hz)",
             false,
             [],
             true,
@@ -1495,6 +1504,8 @@ export class PolarVisRow {
         this.ECGFormSelect.selectedIndex = 0;
       }
 
+      (window as any).lslBridge?.registerStream(this.getEcgSchema());
+
       await this.startECG(ECG_SAMPLE_RATE_HZ);
       this.changeECGGraph({ target: { selectedIndex: 0 } });
     } else {
@@ -1625,6 +1636,8 @@ export class PolarVisRow {
         this.ACCFormSelect.disabled = false;
         this.ACCFormSelect.selectedIndex = 0;
       }
+
+      (window as any).lslBridge?.registerStream(this.getAccSchema());
 
       await this.startACC(this.acc_range_g, this.acc_sample_rate_hz);
       this.changeACCGraph({ target: { selectedIndex: 0 } });
@@ -1884,6 +1897,7 @@ export class PolarVisRow {
             row.ECGFormSelect.selectedIndex,
             row.ECGFormSelect.disabled,
           );
+          (window as any).lslBridge?.registerStream(this.getHRSchema());
         } else {
           if (row.ECGFormSelect.selectedIndex > 2) {
             row.ECGFormSelect.selectedIndex = 0;
@@ -1937,13 +1951,16 @@ export class PolarVisRow {
       this.rr_rmssd = NaN;
     }
 
-    if (this.is_recording && this.hrStreamer !== undefined) {
-      this.hrStreamer.push({
-        epoch_timestamp_ms: hr_info.recv_epoch_time_ms,
-        hr_bpm: hr_info.heart_rate_bpm,
-        hrv_rmssd_ms: this.rr_rmssd,
-      });
+    const data_payload = {
+      epoch_timestamp_ms: hr_info.recv_epoch_time_ms,
+      hr_bpm: hr_info.heart_rate_bpm,
+      hrv_rmssd_ms: this.rr_rmssd,
     }
+
+    if (this.is_recording && this.hrStreamer !== undefined) {
+      this.hrStreamer.push(data_payload);
+    }
+    (window as any).lslBridge?.streamData(this.getHRSchema(), data_payload);
   };
 
   onCustomBodyPart = (ev: any) => {
