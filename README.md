@@ -117,9 +117,9 @@ Leaves an active daemon listening on `ws://localhost:8765`. It handles metadata 
 
  4. Click it again to stop. The system flushes the data, dumps a master metadata.json packet, and automatically generates matching `.arrow` and `.csv` files inside a timed folder block.
 
-### Tips for Running Study:
+### Tips for Running Study
 
-After you select the bodypart for a sensor, you will notice that the url parameter is changed. If you use this new utl next time, after you connect to a sensor, the bodypart is automatically selected for you based on the url parameter.
+ 1. After you select the bodypart for a sensor, you will notice that the url parameter is changed. If you use this new utl next time, after you connect to a sensor, the bodypart is automatically selected for you based on the url parameter.
 
 ## Replaying Saved Sessions
 
