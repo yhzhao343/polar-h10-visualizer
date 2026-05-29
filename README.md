@@ -2,8 +2,15 @@
 
 A real-time physiological data visualizer and streaming pipeline. The system acquires data (ECG, Accelerometer, Respiration Force, and Breathing Rate) in the browser via Web Bluetooth and the Vernier Go Direct API, archives it locally as structured Apache Arrow files, and streams it instantly into Lab Streaming Layer (LSL) via a local WebSocket bridge. See it in action [here](https://yhzhao343.github.io/polar-h10-visualizer/)
 
-[![Watch the video](https://img.youtube.com/vi/kCUuH8LL9HA/maxresdefault.jpg)](https://youtu.be/kCUuH8LL9HA){:height="100px" width="234px"}
+## Sneak Peek
+![polar_sneak_peek](asset/polar_sneak_peek.gif)
 
+## Full Video Demo
+<p align="center">
+  <a href="https://youtu.be/kCUuH8LL9HA">
+    <img src="https://img.youtube.com/vi/kCUuH8LL9HA/maxresdefault.jpg" alt="Watch the video" width="234" height="100" />
+  </a>
+</p>
 
 ## Project Structure
 ```
