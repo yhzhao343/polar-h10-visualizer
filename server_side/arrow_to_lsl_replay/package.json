@@ -1,0 +1,19 @@
+{
+  "name": "arrow_to_lsl_replay",
+  "version": "1.0.0",
+  "description": "script to replay the directory of arrow file recording to lsl",
+  "keywords": [
+    "lsl"
+  ],
+  "license": "ISC",
+  "author": "Yuhui Zhao",
+  "type": "module",
+  "main": "replay_arrow.js",
+  "scripts": {
+    "test": "node replay_arrow.js"
+  },
+  "dependencies": {
+    "apache-arrow": "^21.1.0",
+    "node-labstreaminglayer": "^0.3.0"
+  }
+}

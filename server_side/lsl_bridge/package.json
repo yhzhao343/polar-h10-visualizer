@@ -1,0 +1,16 @@
+{
+  "name": "lsl_bridge",
+  "version": "1.0.0",
+  "description": "Turn visualizer page data stream to lsl",
+  "license": "ISC",
+  "author": "Yuhui Zhao",
+  "main": "lsl_bridge.js",
+  "scripts": {
+    "test": "node lsl_bridge.js"
+  },
+  "type": "module",
+  "dependencies": {
+    "node-labstreaminglayer": "^0.3.0",
+    "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.67.0"
+  }
+}
