@@ -6,7 +6,7 @@ A real-time physiological data visualizer and streaming pipeline. The system acq
 ![polar_sneak_peek](asset/polar_sneak_peek.gif)
 
 ## Full Video Demo
-[![Watch the video](https://img.youtube.com/vi/kCUuH8LL9HA/default.jpg)](https://youtu.be/kCUuH8LL9HA)
+[![Watch the video](https://img.youtube.com/vi/kCUuH8LL9HA/mqdefault.jpg)](https://youtu.be/kCUuH8LL9HA)
 
 ## Project Structure
 ```
