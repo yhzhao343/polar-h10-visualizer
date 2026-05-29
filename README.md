@@ -8,7 +8,7 @@ A real-time physiological data visualizer and streaming pipeline. The system acq
 ## Full Video Demo
 <p align="center">
   <a href="https://youtu.be/kCUuH8LL9HA">
-    <img src="https://img.youtube.com/vi/kCUuH8LL9HA/maxresdefault.jpg" alt="Watch the video" width="234" height="100" />
+    <img src="https://img.youtube.com/vi/kCUuH8LL9HA/maxresdefault.jpg" alt="Watch the video" width="800" height="234" />
   </a>
 </p>
 
