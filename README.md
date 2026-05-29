@@ -12,7 +12,7 @@ You can retro-fit a Polar H10 to make it connect to a standard electrode. Then, 
 |       |       |       |
 | :---: | :---: | :---: |
 | ![prym_ecg_adapter](asset/prym_ecg_adapter.jpeg) | ![assembled_adapters](asset/assembled_adapters.jpeg) | ![baking_adapter](asset/baking_adapter.jpeg)|
-|   prym button to standard ECG socket             |  Assemble and paste the Adapters   | Bake in reflow oven|
+|   prym button to ECG socket             |  Assemble and paste the Adapters   | Bake in reflow oven|
 | ![sensor_and_adapter](asset/sensor_and_adapter.jpeg)|  ![assembled_sensor_with_ecg_pad_on_body_topview](asset/assembled_sensor_with_ecg_pad_on_body_topview.jpeg)   | ![assembled_sensor_with_ecg_pad_on_body](asset/assembled_sensor_with_ecg_pad_on_body.jpeg)|
 |   Fit Polar-H10 with adapters                    |  Add ECG pad and put on skin (top) | Add ECG pad and put on skin|
 
