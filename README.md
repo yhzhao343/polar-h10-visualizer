@@ -1,9 +1,11 @@
 # polar-h10-visualizer
 
-A real-time physiological data visualizer and streaming pipeline. The system acquires data (ECG, Accelerometer, Respiration Force, and Breathing Rate) in the browser via Web Bluetooth and the Vernier Go Direct API, archives it locally as structured Apache Arrow files, and streams it instantly into Lab Streaming Layer (LSL) via a local WebSocket bridge. See it in action [here](https://yhzhao343.github.io/polar-h10-visualizer/)
+A real-time physiological data visualizer and streaming pipeline. The system acquires data (ECG, Accelerometer, Respiration Force, and Breathing Rate) in the browser via Web Bluetooth and the Vernier Go Direct API, archives it locally as structured Apache Arrow files, and streams it instantly into Lab Streaming Layer (LSL) via a local WebSocket bridge. Supports sending keyboard trigger signal for running simple physiological data accquisition study. See it in action [here](https://yhzhao343.github.io/polar-h10-visualizer/)
 
 ## Sneak Peek
 ![polar_sneak_peek](asset/polar_sneak_peek.gif)
+
+## Using Polar-h10 to get EMG data
 
 ## Full Video Demo
 [![Watch the video](https://img.youtube.com/vi/kCUuH8LL9HA/mqdefault.jpg)](https://youtu.be/kCUuH8LL9HA)
@@ -114,6 +116,10 @@ Leaves an active daemon listening on `ws://localhost:8765`. It handles metadata 
  3. Click the Record Button (circle icon) to begin archiving.
 
  4. Click it again to stop. The system flushes the data, dumps a master metadata.json packet, and automatically generates matching `.arrow` and `.csv` files inside a timed folder block.
+
+### Tips for Running Study:
+
+After you select the bodypart for a sensor, you will notice that the url parameter is changed. If you use this new utl next time, after you connect to a sensor, the bodypart is automatically selected for you based on the url parameter.
 
 ## Replaying Saved Sessions
 
